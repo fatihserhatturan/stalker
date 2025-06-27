@@ -1,0 +1,16 @@
+# Gizli bilgileri ve ortam değişkenlerini dışarıda tut
+.env
+
+# Sanal ortam klasörünü dışarıda tut
+# Bu çok önemli çünkü binlerce dosya içerir ve her geliştiricinin kendi ortamı farklıdır.
+venv/
+
+# Python'un derlenmiş dosyalarını ve önbelleğini dışarıda tut
+__pycache__/
+*.pyc
+
+# IDE ve OS'e özel dosyalar
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
