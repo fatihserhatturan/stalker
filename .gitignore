@@ -7,10 +7,10 @@ server/.env
 server/venv/
 
 # Client (Frontend) klasörüne özel dosyalar
-# Bağımlılık klasörü
-client/node_modules/
-# Build sonrası oluşan çıktı klasörü
-client/dist/
+# Bağımlılık klasörü (yeni yola göre güncellendi)
+client/stalker-client/node_modules/
+# Build sonrası oluşan çıktı klasörü (yeni yola göre güncellendi)
+client/stalker-client/dist/
 
 # Python'un derlenmiş dosyalarını ve önbelleğini dışarıda tut
 # Bu dosyalar projenin herhangi bir yerinde oluşabilir
