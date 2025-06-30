@@ -1,13 +1,24 @@
 # Gizli bilgileri ve ortam değişkenlerini dışarıda tut
-.env
+# Bu dosya genellikle 'server' klasöründe bulunur
+server/.env
 
-# Sanal ortam klasörünü dışarıda tut
-# Bu çok önemli çünkü binlerce dosya içerir ve her geliştiricinin kendi ortamı farklıdır.
-venv/
+# Server (Backend) klasörüne özel dosyalar
+# Sanal ortam klasörü
+server/venv/
+
+# Client (Frontend) klasörüne özel dosyalar
+# Bağımlılık klasörü
+client/node_modules/
+# Build sonrası oluşan çıktı klasörü
+client/dist/
 
 # Python'un derlenmiş dosyalarını ve önbelleğini dışarıda tut
-__pycache__/
+# Bu dosyalar projenin herhangi bir yerinde oluşabilir
+**/__pycache__/
 *.pyc
+
+# Log dosyaları
+*.log
 
 # IDE ve OS'e özel dosyalar
 .idea/
