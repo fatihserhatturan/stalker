@@ -1,7 +1,22 @@
-# requirements.txt
-fastapi
-uvicorn[standard]
-python-dotenv
-langchain
-langchain-google-genai
-pydantic
+# Core FastAPI dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# LangChain ecosystem
+langchain==0.1.0
+langchain-google-genai==1.0.1
+langchain-community==0.0.10
+
+# Data validation and serialization
+pydantic==2.5.0
+
+# Additional useful packages
+httpx==0.25.2  # For better HTTP client support
+python-multipart==0.0.6  # For form data handling if needed
+
+# Development dependencies (optional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
