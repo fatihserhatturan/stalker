@@ -1,18 +1,15 @@
 <template>
-  <main>
-    <Chat />
-  </main>
+  <div id="app">
+    <router-view />
+  </div>
 </template>
 
 <script setup>
-// Yeni oluşturduğumuz Chat bileşenini import ediyoruz
-import Chat from './components/ChatComponent.vue';
 </script>
 
 <style>
-/* Tüm sayfayı kaplayan ve varsayılan boşlukları kaldıran
-  global stilleri buraya koymak daha doğrudur.
-*/
+
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -23,8 +20,19 @@ body {
   background-color: #f4f7f9;
 }
 
-main {
+#app {
   width: 100%;
   height: 100vh;
+}
+
+.router-enter-active,
+.router-leave-active {
+  transition: all 0.3s ease;
+}
+
+.router-enter-from,
+.router-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
 }
 </style>

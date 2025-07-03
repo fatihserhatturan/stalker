@@ -1,6 +1,5 @@
 <template>
   <div class="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-    <!-- Header -->
     <div class="relative bg-gray-900/80 backdrop-blur-md border-b border-gray-700/50 shadow-lg">
       <div class="max-w-4xl mx-auto px-6 py-4">
         <div class="flex items-center justify-between">
@@ -62,7 +61,6 @@
       </div>
     </div>
 
-    <!-- Messages Container -->
     <div class="flex-1 overflow-hidden">
       <div class="h-full max-w-4xl mx-auto">
         <div
@@ -75,7 +73,6 @@
               :key="msg.id"
               :class="['flex items-start space-x-4', msg.author === 'user' ? 'flex-row-reverse space-x-reverse' : '']"
             >
-              <!-- Avatar -->
               <div class="flex-shrink-0">
                 <div
                   :class="[
@@ -90,7 +87,6 @@
                 </div>
               </div>
 
-              <!-- Message Bubble -->
               <div
                 :class="[
                   'relative max-w-2xl rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 hover:shadow-xl',
@@ -114,7 +110,6 @@
             </div>
           </div>
 
-          <!-- Typing Indicator -->
           <div v-if="isLoading" class="flex items-start space-x-4">
             <div class="flex-shrink-0">
               <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center shadow-lg">
@@ -134,7 +129,21 @@
             </div>
           </div>
 
-          <!-- Connection Status -->
+          <div v-if="isGeneratingDocument" class="flex items-start space-x-4">
+            <div class="flex-shrink-0">
+              <div class="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg">
+                <DocumentTextIcon class="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
+              <div class="flex items-center space-x-2">
+                <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
+                <span class="text-xs text-gray-400 ml-2">Örnek doküman oluşturuluyor...</span>
+              </div>
+              <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
+            </div>
+          </div>
+
           <div v-if="!isConnected" class="text-center py-4">
             <div class="inline-flex items-center px-4 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm">
               <ExclamationTriangleIcon class="w-4 h-4 mr-2" />
@@ -145,7 +154,21 @@
       </div>
     </div>
 
-    <!-- Input Area -->
+    <div class="bg-gray-900/60 backdrop-blur-md border-t border-gray-700/30 px-6 py-4">
+      <div class="max-w-4xl mx-auto">
+        <div class="flex items-center justify-center mb-4">
+          <button
+            @click="generateSampleDocument"
+            :disabled="isGeneratingDocument || !isConnected"
+            class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+          >
+            <DocumentTextIcon class="w-5 h-5" />
+            <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Örnek Doküman Oluştur' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="bg-gray-900/80 backdrop-blur-md border-t border-gray-700/50">
       <div class="max-w-4xl mx-auto px-6 py-4">
         <form @submit.prevent="sendMessage" class="relative">
@@ -168,7 +191,6 @@
             </button>
           </div>
 
-          <!-- Status bar -->
           <div class="flex items-center justify-between mt-2 text-xs text-gray-400">
             <span>Oturum: {{ sessionId.slice(-8) }}</span>
             <div class="flex items-center space-x-4">
@@ -183,7 +205,6 @@
       </div>
     </div>
 
-    <!-- Notification Toast -->
     <div
       v-if="notification.show"
       :class="[
@@ -198,6 +219,7 @@
 
 <script setup>
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue'
 import {
   CpuChipIcon,
@@ -207,10 +229,12 @@ import {
   DocumentDuplicateIcon,
   TrashIcon,
   PlusIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  DocumentTextIcon
 } from '@heroicons/vue/24/outline'
 
-// --- State Management ---
+const router = useRouter()
+
 const messages = ref([
   {
     id: 1,
@@ -220,22 +244,20 @@ const messages = ref([
 ])
 const newMessage = ref('')
 const isLoading = ref(false)
+const isGeneratingDocument = ref(false)
 const isConnected = ref(true)
 const sessionId = ref(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 const messageList = ref(null)
 const messageInput = ref(null)
 
-// Notification system
 const notification = ref({
   show: false,
   message: '',
   type: 'success'
 })
 
-// API base URL - environment'a göre değiştirilebilir
 const API_BASE_URL = 'http://localhost:8000'
 
-// --- Utility Functions ---
 const showNotification = (message, type = 'success') => {
   notification.value = { show: true, message, type }
   setTimeout(() => {
@@ -259,7 +281,6 @@ const focusInput = () => {
   })
 }
 
-// --- API Functions ---
 const checkConnection = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/health`, {
@@ -278,7 +299,6 @@ const sendMessage = async () => {
   const userMessageText = newMessage.value.trim()
   if (!userMessageText || isLoading.value || !isConnected.value) return
 
-  // Add user message to chat
   messages.value.push({
     id: Date.now(),
     text: userMessageText,
@@ -316,13 +336,11 @@ const sendMessage = async () => {
       author: 'ai'
     })
 
-    // Connection is working
     isConnected.value = true
 
   } catch (error) {
     console.error("API Error:", error)
 
-    // Check if it's a connection error
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       isConnected.value = false
       showNotification('Backend sunucusuna bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.', 'error')
@@ -342,7 +360,56 @@ const sendMessage = async () => {
   }
 }
 
-// --- Menu Actions ---
+const generateSampleDocument = async () => {
+  if (isGeneratingDocument.value || !isConnected.value) return
+
+  isGeneratingDocument.value = true
+  scrollToBottom()
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/generate-document`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        session_id: sessionId.value
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    console.log("Document Data:", data)
+
+    showNotification('Doküman başarıyla oluşturuldu! Yönlendiriliyor...', 'success')
+
+    setTimeout(() => {
+      router.push({
+        path: '/document',
+        query: { sessionId: sessionId.value }
+      })
+    }, 1000)
+
+  } catch (error) {
+    console.error("Document Generation Error:", error)
+
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      isConnected.value = false
+      showNotification('Backend sunucusuna bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.', 'error')
+    } else {
+      showNotification(`Doküman oluşturma hatası: ${error.message}`, 'error')
+    }
+  } finally {
+    isGeneratingDocument.value = false
+    scrollToBottom()
+  }
+}
+
 const copySessionId = async () => {
   try {
     await navigator.clipboard.writeText(sessionId.value)
@@ -355,12 +422,10 @@ const copySessionId = async () => {
 const clearChat = async () => {
   if (confirm('Sohbet geçmişini temizlemek istediğinizden emin misiniz?')) {
     try {
-      // Clear on backend
       await fetch(`${API_BASE_URL}/chat/${sessionId.value}`, {
         method: 'DELETE'
       })
 
-      // Clear local messages (keep welcome message)
       messages.value = [
         {
           id: 1,
@@ -392,13 +457,11 @@ const newSession = () => {
   }
 }
 
-// --- Lifecycle ---
 onMounted(async () => {
   await checkConnection()
   focusInput()
 
-  // Periodic connection check
-  const connectionChecker = setInterval(checkConnection, 30000) // Check every 30 seconds
+  const connectionChecker = setInterval(checkConnection, 30000)
 
   onUnmounted(() => {
     clearInterval(connectionChecker)
@@ -407,7 +470,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Custom scrollbar */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }
@@ -425,7 +487,6 @@ onMounted(async () => {
   background-color: rgb(107 114 128);
 }
 
-/* Enhanced animations */
 @keyframes slideInUp {
   from {
     opacity: 0;
@@ -441,7 +502,6 @@ onMounted(async () => {
   animation: slideInUp 0.3s ease-out;
 }
 
-/* Improved bounce animation for typing indicator */
 @keyframes bounce {
   0%, 60%, 100% {
     transform: translateY(0);
@@ -455,12 +515,10 @@ onMounted(async () => {
   animation: bounce 1.4s infinite;
 }
 
-/* Focus styles */
 input:focus {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* Button hover effects */
 button:hover:not(:disabled) {
   transform: translateY(-1px);
 }

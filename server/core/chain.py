@@ -5,15 +5,13 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferMemory
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
-from core.prompts import SYSTEM_PROMPT_TEMPLATE
+from core.prompts import SYSTEM_PROMPT_TEMPLATE, DOCUMENT_GENERATION_PROMPT
 import logging
 
-# .env dosyasını yükle
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Sohbet hafızasını yönetmek için global bir sözlük
 chat_histories = {}
 
 def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
@@ -29,27 +27,23 @@ def get_memory_for_session(session_id: str) -> ConversationBufferMemory:
 def get_conversational_chain():
     """Hafıza ve prompt ile yapılandırılmış bir chain döndürür."""
 
-    # Google API anahtarını kontrol et
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
         raise ValueError("GOOGLE_API_KEY environment variable is not set!")
 
     try:
-        # 1. Modeli tanımla
         model = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash-exp",
             temperature=0.7,
-            google_api_key=google_api_key
+            google_api_key=google_api_key,
+            convert_system_message_to_human=True
         )
 
-        # 2. Prompt şablonunu oluştur
         prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM_PROMPT_TEMPLATE),
             MessagesPlaceholder(variable_name="history"),
-            ("human", "{input}")
+            ("human", f"{SYSTEM_PROMPT_TEMPLATE}\n\nKullanıcı Mesajı: {{input}}")
         ])
 
-        # 3. Chain'i oluştur - LLMChain yerine | operatörü kullan
         chain = prompt | model | StrOutputParser()
 
         logger.info("Conversational chain created successfully")
@@ -57,4 +51,34 @@ def get_conversational_chain():
 
     except Exception as e:
         logger.error(f"Error creating conversational chain: {str(e)}")
+        raise e
+
+async def generate_sample_document():
+    """Rastgele örnek doküman oluşturan fonksiyon."""
+
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        raise ValueError("GOOGLE_API_KEY environment variable is not set!")
+
+    try:
+        model = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash-exp",
+            temperature=0.8,
+            google_api_key=google_api_key,
+            convert_system_message_to_human=True
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("human", DOCUMENT_GENERATION_PROMPT)
+        ])
+
+        chain = prompt | model | StrOutputParser()
+
+        result = await chain.ainvoke({})
+
+        logger.info("Sample document generated successfully")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error generating sample document: {str(e)}")
         raise e

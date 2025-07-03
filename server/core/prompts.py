@@ -32,7 +32,68 @@ Sen, bir yazılım projesinin başlangıcında iş birimlerinden gelen talepleri
 Şimdi kullanıcının son girdisine ('input') dayanarak, projeyi daha iyi anlamak için en uygun SONRAKI soruyu sor.
 """
 
-# Alternatif prompt şablonları farklı senaryolar için
+DOCUMENT_GENERATION_PROMPT = """
+Lütfen gerçekçi bir yazılım projesi için örnek bir "Proje Ön Analiz Dokümanı" oluştur.
+Bu doküman Markdown formatında olmalı ve aşağıdaki bölümleri içermelidir:
+
+# PROJE ÖN ANALİZ DOKÜMANI
+
+## 1. PROJE TANIMI
+- Proje Adı
+- Ana Amaç
+- Kapsam
+- Hedef Sonuç
+
+## 2. HEDEF KİTLE ANALİZİ
+- Birincil Kullanıcılar
+- İkincil Kullanıcılar
+- Etki Alanı
+- Kullanıcı Profilleri
+
+## 3. MEVCUT DURUM ANALİZİ
+- Şu Anki Süreç
+- Mevcut Problemler
+- İyileştirme Fırsatları
+- Rekabet Analizi
+
+## 4. BAŞARI KRİTERLERİ
+- Ölçülebilir Hedefler
+- KPI'lar
+- Başarı Metrikleri
+
+## 5. TEKNİK GEREKSİNİMLER
+- Teknoloji Stack
+- Entegrasyonlar
+- Performans Gereksinimleri
+- Güvenlik Gereksinimleri
+
+## 6. PROJE PLANI
+- Tahmini Süre
+- Proje Aşamaları
+- Kilometre Taşları
+- Bağımlılıklar
+
+## 7. KAYNAK İHTİYAÇLARI
+- İnsan Kaynağı
+- Teknoloji/Altyapı
+- Bütçe Tahmini
+- Dış Kaynaklar
+
+## 8. RİSK ANALİZİ
+- Yüksek Riskler
+- Orta Riskler
+- Düşük Riskler
+- Risk Azaltma Stratejileri
+
+## 9. ÖNERİLER VE SONUÇ
+- Öncelik Sırası
+- İlk Adımlar
+- Alternatif Yaklaşımlar
+- Genel Değerlendirme
+
+Lütfen gerçekçi bir yazılım projesi (örn: e-ticaret platformu, CRM sistemi, mobil uygulama, vb.) seç ve bu proje için detaylı, profesyonel bir analiz dokümanı oluştur. Tüm bölümler doldurulmalı ve gerçekçi veriler içermelidir.
+"""
+
 DETAILED_ANALYSIS_PROMPT = """
 Kullanıcı ile yaptığın konuşma sonucunda aşağıdaki formatta bir Ön Analiz Dokümanı hazırla:
 
