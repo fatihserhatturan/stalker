@@ -83,6 +83,34 @@
                   ></div>
                 </div>
               </div>
+
+              <!-- Dokümanları göster -->
+              <div v-if="sessionDocuments.length > 0" class="space-y-3">
+                <div class="text-center">
+                  <div class="inline-flex items-center px-3 py-1 bg-emerald-600/20 text-emerald-400 rounded-full text-xs">
+                    <DocumentTextIcon class="w-3 h-3 mr-1" />
+                    Oluşturulan Dokümanlar
+                  </div>
+                </div>
+
+                <div
+                  v-for="doc in sessionDocuments"
+                  :key="doc.id"
+                  @click="openDocument(doc)"
+                  class="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 cursor-pointer hover:bg-gray-700/60 hover:border-emerald-500/50 transition-all duration-200 transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
+                >
+                  <div class="flex items-start space-x-3">
+                    <div class="p-2 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-lg shadow-lg">
+                      <DocumentTextIcon class="w-4 h-4 text-white" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h4 class="text-sm font-medium text-white truncate">{{ doc.title }}</h4>
+                      <p class="text-xs text-gray-400 mt-1">{{ formatDocumentDate(doc.created_at) }}</p>
+                      <p class="text-xs text-emerald-400 mt-1">Görüntülemek için tıklayın</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div v-if="isLoading" class="flex items-start space-x-4">
@@ -232,6 +260,7 @@ const messageInput = ref(null)
 // Document viewer state
 const showDocument = ref(false)
 const documentContent = ref('')
+const sessionDocuments = ref([])
 
 const notification = ref({
   show: false,
@@ -264,6 +293,16 @@ const focusInput = () => {
   })
 }
 
+const formatDocumentDate = (dateString) => {
+  return new Date(dateString).toLocaleDateString('tr-TR', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const checkConnection = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/health`, {
@@ -275,6 +314,43 @@ const checkConnection = async () => {
   } catch (error) {
     isConnected.value = false
     return false
+  }
+}
+
+const loadSessionDocuments = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/session-documents/${sessionId.value}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      sessionDocuments.value = data.documents || []
+      scrollToBottom()
+    }
+  } catch (error) {
+    console.error('Error loading session documents:', error)
+  }
+}
+
+const openDocument = async (doc) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/document/${sessionId.value}/${doc.id}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      documentContent.value = data.document.content
+      showDocument.value = true
+    } else {
+      showNotification('Doküman yüklenirken hata oluştu', 'error')
+    }
+  } catch (error) {
+    console.error('Error loading document:', error)
+    showNotification('Doküman yüklenirken hata oluştu', 'error')
   }
 }
 
@@ -371,6 +447,9 @@ const generateAnalysisDocument = async () => {
     documentContent.value = data.document_content
     showDocument.value = true
 
+    // Session dokümanlarını yeniden yükle
+    await loadSessionDocuments()
+
     showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
 
   } catch (error) {
@@ -388,6 +467,7 @@ const closeDocument = () => {
 
 onMounted(async () => {
   await checkConnection()
+  await loadSessionDocuments()
   focusInput()
 
   const connectionChecker = setInterval(checkConnection, 30000)

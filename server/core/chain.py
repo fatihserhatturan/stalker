@@ -7,14 +7,16 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 from core.prompts import SYSTEM_PROMPT_TEMPLATE, DOCUMENT_GENERATION_PROMPT, DETAILED_ANALYSIS_PROMPT
 import logging
+from datetime import datetime
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Session bazlı memory ve analiz durumu tracking
+# Session bazlı memory, analiz durumu ve doküman tracking
 chat_histories = {}
 analysis_context = {}
+session_documents = {}  # Yeni: Session'lara ait dokümanları saklar
 
 def get_memory_for_session(session_id: str) -> ConversationSummaryBufferMemory:
     """Verilen session_id için optimize edilmiş hafızayı alır veya oluşturur."""
@@ -50,7 +52,39 @@ def get_memory_for_session(session_id: str) -> ConversationSummaryBufferMemory:
             "analysis_phase": "discovery"  # discovery, clarification, completion
         }
 
+        # Session dokümanları için boş liste oluştur
+        session_documents[session_id] = []
+
     return chat_histories[session_id]
+
+def save_document_to_session(session_id: str, document_content: str, document_title: str = None):
+    """Dokümanı session'a kaydeder."""
+    if session_id not in session_documents:
+        session_documents[session_id] = []
+
+    document = {
+        "id": f"doc_{len(session_documents[session_id]) + 1}_{int(datetime.now().timestamp())}",
+        "title": document_title or f"Analiz Dokümanı {len(session_documents[session_id]) + 1}",
+        "content": document_content,
+        "created_at": datetime.now().isoformat(),
+        "type": "analysis_document"
+    }
+
+    session_documents[session_id].append(document)
+    logger.info(f"Document saved to session {session_id}: {document['id']}")
+    return document
+
+def get_session_documents(session_id: str) -> list:
+    """Session'a ait dokümanları döndürür."""
+    return session_documents.get(session_id, [])
+
+def get_document_by_id(session_id: str, document_id: str) -> dict:
+    """Session'dan belirli bir dokümanı döndürür."""
+    documents = session_documents.get(session_id, [])
+    for doc in documents:
+        if doc["id"] == document_id:
+            return doc
+    return None
 
 def update_analysis_context(session_id: str, user_message: str, ai_response: str):
     """Analiz durumunu günceller ve hangi bilgilerin toplandığını takip eder."""
@@ -200,7 +234,7 @@ async def process_conversation(session_id: str, user_message: str):
         raise e
 
 async def generate_detailed_analysis_document(session_id: str):
-    """Session geçmişine dayalı detaylı analiz dokümanı oluşturur."""
+    """Session geçmişine dayalı detaylı analiz dokümanı oluşturur ve session'a kaydeder."""
 
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
@@ -240,13 +274,16 @@ Eksik bilgiler için [BİLGİ GEREKLİ] notasyonunu kullan.
         chain = prompt | model | StrOutputParser()
         result = await chain.ainvoke({})
 
-        logger.info(f"Detailed analysis document generated for session: {session_id}")
+        # Dokümanı session'a kaydet
+        document_title = f"Proje Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        saved_document = save_document_to_session(session_id, result, document_title)
+
+        logger.info(f"Detailed analysis document generated and saved for session: {session_id}")
         return result
 
     except Exception as e:
         logger.error(f"Error generating detailed analysis: {str(e)}")
         raise e
-
 
 def get_analysis_status(session_id: str) -> dict:
     """Session için analiz durumunu döndürür."""
@@ -256,10 +293,14 @@ def get_analysis_status(session_id: str) -> dict:
     context = analysis_context[session_id]
     completion_rate = sum(context["collected_info"].values()) / 7 * 100
 
+    # Session dokümanlarını da dahil et
+    documents = get_session_documents(session_id)
+
     return {
         "completion_rate": completion_rate,
         "phase": context["analysis_phase"],
         "message_count": context["message_count"],
         "collected_areas": context["collected_info"],
-        "ready_for_document": completion_rate >= 70
+        "ready_for_document": completion_rate >= 70,
+        "documents": documents
     }

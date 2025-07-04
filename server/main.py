@@ -5,7 +5,9 @@ from core.schemas import ChatRequest, ChatResponse, DocumentRequest, DocumentRes
 from core.chain import (
     process_conversation,
     generate_detailed_analysis_document,
-    get_analysis_status
+    get_analysis_status,
+    get_session_documents,
+    get_document_by_id
 )
 import logging
 
@@ -83,6 +85,58 @@ async def get_session_analysis_status(session_id: str):
         raise HTTPException(
             status_code=500,
             detail=f"Analiz durumu alınırken hata oluştu: {str(e)}"
+        )
+
+@app.get("/session-documents/{session_id}")
+async def get_documents_for_session(session_id: str):
+    """
+    Session'a ait dokümanları döndüren endpoint.
+    """
+    try:
+        logger.info(f"Documents request for session: {session_id}")
+
+        documents = get_session_documents(session_id)
+
+        return {
+            "session_id": session_id,
+            "documents": documents
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting session documents: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Session dokümanları alınırken hata oluştu: {str(e)}"
+        )
+
+@app.get("/document/{session_id}/{document_id}")
+async def get_document(session_id: str, document_id: str):
+    """
+    Belirli bir dokümanı döndüren endpoint.
+    """
+    try:
+        logger.info(f"Document request: {document_id} for session: {session_id}")
+
+        document = get_document_by_id(session_id, document_id)
+
+        if not document:
+            raise HTTPException(
+                status_code=404,
+                detail="Doküman bulunamadı"
+            )
+
+        return {
+            "session_id": session_id,
+            "document": document
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Doküman alınırken hata oluştu: {str(e)}"
         )
 
 @app.post("/generate-analysis-document", response_model=DocumentResponse)
