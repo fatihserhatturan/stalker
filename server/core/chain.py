@@ -5,9 +5,12 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationSummaryBufferMemory
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
-from core.prompts import SYSTEM_PROMPT_TEMPLATE, DOCUMENT_GENERATION_PROMPT, DETAILED_ANALYSIS_PROMPT
+from core.prompts import SYSTEM_PROMPT_TEMPLATE, DOCUMENT_GENERATION_PROMPT, DETAILED_ANALYSIS_PROMPT, FILE_ANALYSIS_PROMPT
 import logging
 from datetime import datetime
+import docx
+import PyPDF2
+from io import BytesIO
 
 load_dotenv()
 
@@ -16,28 +19,27 @@ logger = logging.getLogger(__name__)
 # Session bazlı memory, analiz durumu ve doküman tracking
 chat_histories = {}
 analysis_context = {}
-session_documents = {}  # Yeni: Session'lara ait dokümanları saklar
+session_documents = {}
+uploaded_files = {}  # Yüklenen dosyaları saklar
 
 def get_memory_for_session(session_id: str) -> ConversationSummaryBufferMemory:
     """Verilen session_id için optimize edilmiş hafızayı alır veya oluşturur."""
     if session_id not in chat_histories:
         logger.info(f"Creating new memory for session: {session_id}")
 
-        # Daha verimli memory kullanımı için SummaryBufferMemory
         chat_histories[session_id] = ConversationSummaryBufferMemory(
             llm=ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash",  # Summary için daha hızlı model
+                model="gemini-2.5-flash",
                 temperature=0.1,
                 google_api_key=os.getenv("GOOGLE_API_KEY"),
                 convert_system_message_to_human=True
             ),
             memory_key="history",
             return_messages=True,
-            max_token_limit=2000,  # Uzun konuşmalarda summary yapar
+            max_token_limit=2000,
             moving_summary_buffer="Önceki konuşma özeti: "
         )
 
-        # Analiz durumu tracking başlat
         analysis_context[session_id] = {
             "collected_info": {
                 "proje_tanimi": False,
@@ -49,11 +51,12 @@ def get_memory_for_session(session_id: str) -> ConversationSummaryBufferMemory:
                 "riskler": False
             },
             "message_count": 0,
-            "analysis_phase": "discovery"  # discovery, clarification, completion
+            "analysis_phase": "discovery",
+            "has_uploaded_files": False
         }
 
-        # Session dokümanları için boş liste oluştur
         session_documents[session_id] = []
+        uploaded_files[session_id] = []
 
     return chat_histories[session_id]
 
@@ -86,6 +89,97 @@ def get_document_by_id(session_id: str, document_id: str) -> dict:
             return doc
     return None
 
+def extract_text_from_file(file_content: bytes, filename: str, file_extension: str) -> str:
+    """Dosyadan metin çıkarır."""
+    try:
+        if file_extension in ['.txt', '.md']:
+            return file_content.decode('utf-8')
+
+        elif file_extension == '.pdf':
+            pdf_reader = PyPDF2.PdfReader(BytesIO(file_content))
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            return text
+
+        elif file_extension in ['.docx', '.doc']:
+            doc = docx.Document(BytesIO(file_content))
+            text = ""
+            for paragraph in doc.paragraphs:
+                text += paragraph.text + "\n"
+            return text
+
+        else:
+            raise ValueError(f"Desteklenmeyen dosya formatı: {file_extension}")
+
+    except Exception as e:
+        logger.error(f"Error extracting text from file: {str(e)}")
+        raise e
+
+async def process_uploaded_file(session_id: str, file_content: bytes, filename: str, file_extension: str):
+    """Yüklenen dosyayı analiz eder ve session'a ekler."""
+    try:
+        # Dosyadan metin çıkar
+        extracted_text = extract_text_from_file(file_content, filename, file_extension)
+
+        # Dosya bilgilerini session'a kaydet
+        if session_id not in uploaded_files:
+            uploaded_files[session_id] = []
+
+        file_info = {
+            "filename": filename,
+            "content": extracted_text,
+            "uploaded_at": datetime.now().isoformat(),
+            "file_type": file_extension
+        }
+
+        uploaded_files[session_id].append(file_info)
+
+        # Analysis context'i güncelle
+        if session_id in analysis_context:
+            analysis_context[session_id]["has_uploaded_files"] = True
+
+        # Dosyayı AI ile analiz et
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable is not set!")
+
+        model = ChatGoogleGenerativeAI(
+            model="gemini-2.5-pro",
+            temperature=0.3,
+            google_api_key=google_api_key,
+            convert_system_message_to_human=True
+        )
+
+        analysis_prompt = f"""
+{FILE_ANALYSIS_PROMPT}
+
+**Dosya Adı:** {filename}
+**Dosya İçeriği:**
+{extracted_text[:8000]}  # İlk 8000 karakteri analiz et
+"""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("human", analysis_prompt)
+        ])
+
+        chain = prompt | model | StrOutputParser()
+        analysis_result = await chain.ainvoke({})
+
+        # Analiz sonucunu memory'ye ekle
+        memory = get_memory_for_session(session_id)
+        memory.save_context(
+            {"input": f"Dosya yüklendi: {filename}"},
+            {"output": f"Dosya analizi tamamlandı:\n\n{analysis_result}"}
+        )
+
+        logger.info(f"File processed and analyzed for session: {session_id}")
+        return analysis_result
+
+    except Exception as e:
+        logger.error(f"Error processing uploaded file: {str(e)}")
+        raise e
+
 def update_analysis_context(session_id: str, user_message: str, ai_response: str):
     """Analiz durumunu günceller ve hangi bilgilerin toplandığını takip eder."""
     if session_id not in analysis_context:
@@ -94,7 +188,6 @@ def update_analysis_context(session_id: str, user_message: str, ai_response: str
     context = analysis_context[session_id]
     context["message_count"] += 1
 
-    # Basit keyword analizi ile toplanan bilgileri işaretle
     user_lower = user_message.lower()
 
     if any(keyword in user_lower for keyword in ["proje", "sistem", "uygulama", "platform", "çözüm"]):
@@ -118,7 +211,6 @@ def update_analysis_context(session_id: str, user_message: str, ai_response: str
     if any(keyword in user_lower for keyword in ["risk", "engel", "sorun", "zorluk", "kısıt"]):
         context["collected_info"]["riskler"] = True
 
-    # Analiz fazını güncelle
     completed_areas = sum(context["collected_info"].values())
 
     if completed_areas < 3:
@@ -136,8 +228,8 @@ def get_enhanced_prompt(session_id: str) -> str:
     context = analysis_context[session_id]
     collected = context["collected_info"]
     phase = context["analysis_phase"]
+    has_files = context.get("has_uploaded_files", False)
 
-    # Eksik olan alanları belirle
     missing_areas = [area for area, collected_status in collected.items() if not collected_status]
 
     enhanced_prompt = SYSTEM_PROMPT_TEMPLATE + f"""
@@ -147,8 +239,16 @@ def get_enhanced_prompt(session_id: str) -> str:
 - Analiz Fazı: {phase}
 - Eksik Alanlar: {', '.join(missing_areas) if missing_areas else 'Tümü tamamlandı'}
 - Mesaj Sayısı: {context["message_count"]}
+- Yüklenen Dosya Var: {'Evet' if has_files else 'Hayır'}
 
 **Soru Stratejisi:**
+"""
+
+    if has_files:
+        enhanced_prompt += """
+- Yüklenen dosyalardaki bilgileri dikkate al
+- Eksik bilgileri dosya içeriğine dayanarak netleştir
+- Dosyadaki teknik detayları analiz sonuçlarında kullan
 """
 
     if phase == "discovery":
@@ -170,6 +270,15 @@ def get_enhanced_prompt(session_id: str) -> str:
 - Doküman hazırlığı için son kontroller
 """
 
+    # Yüklenen dosya bilgilerini ekle
+    if has_files and session_id in uploaded_files:
+        enhanced_prompt += f"""
+
+**Yüklenen Dosyalar:**
+"""
+        for file_info in uploaded_files[session_id]:
+            enhanced_prompt += f"- {file_info['filename']} ({file_info['file_type']}) - {file_info['uploaded_at']}\n"
+
     return enhanced_prompt
 
 def get_conversational_chain():
@@ -187,7 +296,6 @@ def get_conversational_chain():
             convert_system_message_to_human=True
         )
 
-        # Dinamik prompt template
         prompt = ChatPromptTemplate.from_messages([
             MessagesPlaceholder(variable_name="history"),
             ("human", "{enhanced_prompt}\n\nKullanıcı Mesajı: {input}")
@@ -208,7 +316,6 @@ async def process_conversation(session_id: str, user_message: str):
         memory = get_memory_for_session(session_id)
         chain = get_conversational_chain()
 
-        # Enhanced prompt al
         enhanced_prompt = get_enhanced_prompt(session_id)
 
         result = await chain.ainvoke({
@@ -217,13 +324,11 @@ async def process_conversation(session_id: str, user_message: str):
             "history": memory.chat_memory.messages
         })
 
-        # Memory'yi güncelle
         memory.save_context(
             {"input": user_message},
             {"output": result}
         )
 
-        # Analysis context'i güncelle
         update_analysis_context(session_id, user_message, result)
 
         logger.info(f"Conversation processed for session: {session_id}")
@@ -245,17 +350,24 @@ async def generate_detailed_analysis_document(session_id: str):
 
         model = ChatGoogleGenerativeAI(
             model="gemini-2.5-pro",
-            temperature=0.3,  # Daha tutarlı doküman için düşük temperature
+            temperature=0.3,
             google_api_key=google_api_key,
             convert_system_message_to_human=True
         )
 
-        # Konuşma geçmişini prompt'a dahil et
         conversation_history = ""
         for message in memory.chat_memory.messages:
             if hasattr(message, 'content'):
                 role = "Kullanıcı" if message.type == "human" else "AI"
                 conversation_history += f"{role}: {message.content}\n\n"
+
+        # Yüklenen dosya bilgilerini ekle
+        uploaded_files_content = ""
+        if session_id in uploaded_files and uploaded_files[session_id]:
+            uploaded_files_content = "\n**Yüklenen Dosyalar:**\n"
+            for file_info in uploaded_files[session_id]:
+                uploaded_files_content += f"\n**Dosya: {file_info['filename']}**\n"
+                uploaded_files_content += f"İçerik: {file_info['content'][:2000]}...\n"
 
         detailed_prompt = f"""
 {DETAILED_ANALYSIS_PROMPT}
@@ -263,7 +375,9 @@ async def generate_detailed_analysis_document(session_id: str):
 **Konuşma Geçmişi:**
 {conversation_history}
 
-Yukarıdaki konuşma geçmişini analiz ederek topladığın bilgiler ile kapsamlı bir Ön Analiz Dokümanı hazırla.
+{uploaded_files_content}
+
+Yukarıdaki konuşma geçmişini ve yüklenen dosyaları analiz ederek topladığın bilgiler ile kapsamlı bir Ön Analiz Dokümanı hazırla.
 Eksik bilgiler için [BİLGİ GEREKLİ] notasyonunu kullan.
 """
 
@@ -274,7 +388,6 @@ Eksik bilgiler için [BİLGİ GEREKLİ] notasyonunu kullan.
         chain = prompt | model | StrOutputParser()
         result = await chain.ainvoke({})
 
-        # Dokümanı session'a kaydet
         document_title = f"Proje Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         saved_document = save_document_to_session(session_id, result, document_title)
 
@@ -293,7 +406,6 @@ def get_analysis_status(session_id: str) -> dict:
     context = analysis_context[session_id]
     completion_rate = sum(context["collected_info"].values()) / 7 * 100
 
-    # Session dokümanlarını da dahil et
     documents = get_session_documents(session_id)
 
     return {
@@ -302,5 +414,7 @@ def get_analysis_status(session_id: str) -> dict:
         "message_count": context["message_count"],
         "collected_areas": context["collected_info"],
         "ready_for_document": completion_rate >= 70,
-        "documents": documents
+        "documents": documents,
+        "has_uploaded_files": context.get("has_uploaded_files", False),
+        "uploaded_files_count": len(uploaded_files.get(session_id, []))
     }

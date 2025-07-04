@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from core.schemas import ChatRequest, ChatResponse, DocumentRequest, DocumentResponse
 from core.chain import (
@@ -7,7 +7,8 @@ from core.chain import (
     generate_detailed_analysis_document,
     get_analysis_status,
     get_session_documents,
-    get_document_by_id
+    get_document_by_id,
+    process_uploaded_file
 )
 import logging
 
@@ -47,7 +48,6 @@ async def chat_with_analyst(request: ChatRequest):
     try:
         logger.info(f"Chat request received for session: {request.session_id}")
 
-        # Yeni gelişmiş process_conversation fonksiyonunu kullan
         result = await process_conversation(request.session_id, request.message)
 
         logger.info(f"Chat response generated for session: {request.session_id}")
@@ -62,6 +62,53 @@ async def chat_with_analyst(request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Sohbet işlenirken bir hata oluştu: {str(e)}"
+        )
+
+@app.post("/upload-file")
+async def upload_file(
+    file: UploadFile = File(...),
+    session_id: str = Form(...)
+):
+    """
+    Proje dosyalarını yüklemek için endpoint.
+    """
+    try:
+        logger.info(f"File upload request for session: {session_id}, file: {file.filename}")
+
+        # Dosya boyutu kontrolü (10MB limit)
+        file_content = await file.read()
+        if len(file_content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Dosya boyutu 10MB'dan büyük olamaz")
+
+        # Dosya tipini kontrol et
+        allowed_extensions = ['.txt', '.md', '.pdf', '.docx', '.doc']
+        file_extension = '.' + file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Desteklenmeyen dosya formatı. İzin verilen formatlar: {', '.join(allowed_extensions)}"
+            )
+
+        # Dosyayı işle ve analiz et
+        analysis_result = await process_uploaded_file(session_id, file_content, file.filename, file_extension)
+
+        logger.info(f"File processed successfully for session: {session_id}")
+
+        return {
+            "message": "Dosya başarıyla yüklendi ve analiz edildi",
+            "session_id": session_id,
+            "filename": file.filename,
+            "analysis": analysis_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in file upload endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dosya yüklenirken bir hata oluştu: {str(e)}"
         )
 
 @app.get("/analysis-status/{session_id}")
@@ -148,7 +195,6 @@ async def generate_analysis_document(request: DocumentRequest):
     try:
         logger.info(f"Analysis document generation request received for session: {request.session_id}")
 
-        # Analiz durumunu kontrol et
         status = get_analysis_status(request.session_id)
 
         if "error" in status:
@@ -157,7 +203,6 @@ async def generate_analysis_document(request: DocumentRequest):
                 detail="Session bulunamadı veya konuşma geçmişi yok"
             )
 
-        # Session'daki konuşma geçmişinden analiz dokümanı oluştur
         document_content = await generate_detailed_analysis_document(request.session_id)
 
         logger.info(f"Analysis document generated successfully for session: {request.session_id}")

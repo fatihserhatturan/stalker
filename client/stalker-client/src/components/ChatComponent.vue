@@ -146,6 +146,21 @@
               </div>
             </div>
 
+            <div v-if="isUploadingFile" class="flex items-start space-x-4">
+              <div class="flex-shrink-0">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-700 flex items-center justify-center shadow-lg">
+                  <ArrowUpTrayIcon class="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
+                <div class="flex items-center space-x-2">
+                  <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400"></div>
+                  <span class="text-xs text-gray-400 ml-2">Dosya yükleniyor ve analiz ediliyor...</span>
+                </div>
+                <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
+              </div>
+            </div>
+
             <div v-if="!isConnected" class="text-center py-4">
               <div class="inline-flex items-center px-4 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm">
                 <ExclamationTriangleIcon class="w-4 h-4 mr-2" />
@@ -177,9 +192,72 @@
         </div>
       </div>
 
-      <!-- Mesaj Giriş Alanı -->
+      <!-- Mesaj Giriş Alanı ve Dosya Yükleme -->
       <div class="bg-gray-900/80 backdrop-blur-md border-t border-gray-700/50">
         <div class="max-w-4xl mx-auto px-6 py-4">
+          <!-- Dosya Yükleme Alanı -->
+          <div v-if="showFileUpload" class="mb-4 p-4 bg-gray-800/60 border border-gray-700/50 rounded-xl">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-white">Proje Dosyası Yükle</h3>
+              <button
+                @click="showFileUpload = false"
+                class="text-gray-400 hover:text-gray-200 transition-colors"
+              >
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+
+            <div
+              @drop="handleFileDrop"
+              @dragover.prevent
+              @dragenter.prevent
+              class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-purple-500 transition-colors cursor-pointer"
+              :class="{ 'border-purple-500 bg-purple-500/10': isDragging }"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                accept=".txt,.md,.pdf,.docx,.doc"
+                @change="handleFileSelect"
+                class="hidden"
+              />
+
+              <div class="space-y-2">
+                <ArrowUpTrayIcon class="w-8 h-8 text-gray-400 mx-auto" />
+                <p class="text-sm text-gray-300">
+                  <button
+                    @click="$refs.fileInput?.click()"
+                    class="text-purple-400 hover:text-purple-300 underline"
+                  >
+                    Dosya seç
+                  </button>
+                  veya buraya sürükle
+                </p>
+                <p class="text-xs text-gray-500">
+                  Desteklenen formatlar: PDF, Word, Markdown, Text
+                </p>
+              </div>
+            </div>
+
+            <div v-if="selectedFile" class="mt-3 flex items-center space-x-2 p-3 bg-gray-700/50 rounded-lg">
+              <DocumentTextIcon class="w-5 h-5 text-purple-400" />
+              <span class="text-sm text-gray-300 flex-1">{{ selectedFile.name }}</span>
+              <button
+                @click="uploadFile"
+                :disabled="isUploadingFile"
+                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                {{ isUploadingFile ? 'Yükleniyor...' : 'Yükle' }}
+              </button>
+              <button
+                @click="selectedFile = null"
+                class="text-gray-400 hover:text-gray-200 transition-colors"
+              >
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
           <form @submit.prevent="sendMessage" class="relative">
             <div class="relative flex items-center">
               <input
@@ -188,9 +266,21 @@
                 type="text"
                 placeholder="Proje fikrinizi detaylıca anlatın..."
                 :disabled="isLoading || !isConnected"
-                class="w-full pl-4 pr-12 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg"
+                class="w-full pl-4 pr-20 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg"
                 @keydown.enter.prevent="sendMessage"
               />
+
+              <!-- Dosya Yükleme Butonu -->
+              <button
+                type="button"
+                @click="showFileUpload = !showFileUpload"
+                :disabled="isLoading || !isConnected"
+                class="absolute right-12 p-2 text-gray-400 hover:text-purple-400 transition-all duration-200 disabled:text-gray-600 disabled:cursor-not-allowed"
+                title="Dosya Yükle"
+              >
+                <PaperClipIcon class="w-4 h-4" />
+              </button>
+
               <button
                 type="submit"
                 :disabled="isLoading || newMessage.trim() === '' || !isConnected"
@@ -237,23 +327,33 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
   DocumentTextIcon,
+  PaperClipIcon,
+  ArrowUpTrayIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import DocumentViewer from './DocumentViewer.vue'
 
 const messages = ref([
   {
     id: 1,
-    text: 'Merhaba! Ben projenizin ön analizini yapmak için buradayım. Proje fikrinizi detaylıca anlatırsanız, kapsamlı bir analiz hazırlayabilirim.',
+    text: 'Merhaba! Ben projenizin ön analizini yapmak için buradayım. Proje fikrinizi detaylıca anlatırsanız, kapsamlı bir analiz hazırlayabilirim.\n\n💡 İpucu: Eğer mevcut bir projeniz varsa, proje dokümanlarınızı (PDF, Word, tekst dosyaları) yükleyerek daha detaylı analiz yapabilirim!',
     author: 'ai'
   }
 ])
 const newMessage = ref('')
 const isLoading = ref(false)
 const isGeneratingDocument = ref(false)
+const isUploadingFile = ref(false)
 const isConnected = ref(true)
 const sessionId = ref(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 const messageList = ref(null)
 const messageInput = ref(null)
+
+// File upload state
+const showFileUpload = ref(false)
+const selectedFile = ref(null)
+const isDragging = ref(false)
+const fileInput = ref(null)
 
 // Document viewer state
 const showDocument = ref(false)
@@ -377,6 +477,102 @@ const openDocument = async (doc) => {
   }
 }
 
+// File upload functions
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    validateAndSetFile(file)
+  }
+}
+
+const handleFileDrop = (event) => {
+  event.preventDefault()
+  isDragging.value = false
+
+  const files = event.dataTransfer.files
+  if (files.length > 0) {
+    validateAndSetFile(files[0])
+  }
+}
+
+const validateAndSetFile = (file) => {
+  const allowedTypes = [
+    'text/plain',
+    'text/markdown',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword'
+  ]
+
+  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx', '.doc']
+  const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+
+  if (file.size > 10 * 1024 * 1024) {
+    showNotification('Dosya boyutu 10MB\'dan büyük olamaz', 'error')
+    return
+  }
+
+  if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+    showNotification('Desteklenmeyen dosya formatı. İzin verilen formatlar: PDF, Word, Markdown, Text', 'error')
+    return
+  }
+
+  selectedFile.value = file
+}
+
+const uploadFile = async () => {
+  if (!selectedFile.value || isUploadingFile.value) return
+
+  isUploadingFile.value = true
+
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    formData.append('session_id', sessionId.value)
+
+    const response = await fetch(`${API_BASE_URL}/upload-file`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+
+    // Başarılı upload mesajını sohbete ekle
+    messages.value.push({
+      id: Date.now(),
+      text: `📁 Dosya yüklendi: ${selectedFile.value.name}`,
+      author: 'user'
+    })
+
+    // AI'ın analiz sonucunu ekle
+    messages.value.push({
+      id: Date.now() + 1,
+      text: data.analysis,
+      author: 'ai'
+    })
+
+    selectedFile.value = null
+    showFileUpload.value = false
+
+    // Analysis status'u güncelle
+    await loadAnalysisStatus()
+
+    showNotification('Dosya başarıyla yüklendi ve analiz edildi!', 'success')
+
+  } catch (error) {
+    console.error("File upload error:", error)
+    showNotification(`Dosya yüklenirken hata: ${error.message}`, 'error')
+  } finally {
+    isUploadingFile.value = false
+    scrollToBottom()
+  }
+}
+
 const sendMessage = async () => {
   const userMessageText = newMessage.value.trim()
   if (!userMessageText || isLoading.value || !isConnected.value) return
@@ -418,9 +614,7 @@ const sendMessage = async () => {
       author: 'ai'
     })
 
-    // Analysis status'u güncelle
     await loadAnalysisStatus()
-
     isConnected.value = true
 
   } catch (error) {
@@ -469,11 +663,9 @@ const generateAnalysisDocument = async () => {
 
     const data = await response.json()
 
-    // Dokümanı sağ panelde göster
     documentContent.value = data.document_content
     showDocument.value = true
 
-    // Session dokümanlarını yeniden yükle
     await loadSessionDocuments()
 
     showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
@@ -490,6 +682,7 @@ const closeDocument = () => {
   showDocument.value = false
   documentContent.value = ''
 }
+
 
 onMounted(async () => {
   await checkConnection()
