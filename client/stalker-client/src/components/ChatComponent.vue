@@ -9,7 +9,7 @@
     >
       <!-- Header -->
       <div class="relative bg-gray-900/80 backdrop-blur-md border-b border-gray-700/50 shadow-lg">
-        <div class="max-w-4xl mx-auto px-6 py-4">
+        <div class="max-w-4xl mx-auto px-6 py-4 h-[80px]">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
               <div class="p-2 bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl shadow-lg">
@@ -63,10 +63,10 @@
 
                 <div
                   :class="[
-                    'relative max-w-2xl rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 hover:shadow-xl',
+                    'relative max-w-2xl rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 hover:border-blue-400',
                     msg.author === 'ai'
                       ? 'bg-gray-800 border border-gray-700/50 text-gray-100'
-                      : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white'
+                      : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border border-transparent hover:border-emerald-300'
                   ]"
                 >
                   <p :class="['text-sm leading-relaxed whitespace-pre-wrap', msg.author === 'ai' ? 'text-gray-100' : 'text-white']">
@@ -96,7 +96,7 @@
                   v-for="doc in sessionDocuments"
                   :key="doc.id"
                   @click="openDocument(doc)"
-                  class="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 cursor-pointer hover:bg-gray-700/60 hover:border-emerald-500/50 transition-all duration-200 transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
+                  class="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 cursor-pointer hover:border-emerald-500 transition-all duration-200"
                 >
                   <div class="flex items-start space-x-3">
                     <div class="p-2 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-lg shadow-lg">
@@ -172,13 +172,13 @@
       </div>
 
       <!-- Doküman Oluşturma Butonu -->
-      <div v-if="messages.length > 2 && !showDocument" class="bg-gray-900/60 backdrop-blur-md border-t border-gray-700/30 px-6 py-4">
+      <div v-if="messages.length > 2 && !showDocument" class="px-6 py-4">
         <div class="max-w-4xl mx-auto">
           <div class="flex items-center justify-center mb-4">
             <button
               @click="generateAnalysisDocument"
               :disabled="isGeneratingDocument || !isConnected || isLoading"
-              class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+              class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:border-emerald-400 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed border border-transparent"
             >
               <DocumentTextIcon class="w-5 h-5" />
               <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Analiz Dokümanı Oluştur' }}</span>
@@ -193,15 +193,15 @@
       </div>
 
       <!-- Mesaj Giriş Alanı ve Dosya Yükleme -->
-      <div class="bg-gray-900/80 backdrop-blur-md border-t border-gray-700/50">
-        <div class="max-w-4xl mx-auto px-6 py-4">
+      <div class="px-6 py-4">
+        <div class="max-w-4xl mx-auto">
           <!-- Dosya Yükleme Alanı -->
           <div v-if="showFileUpload" class="mb-4 p-4 bg-gray-800/60 border border-gray-700/50 rounded-xl">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-sm font-medium text-white">Proje Dosyası Yükle</h3>
               <button
                 @click="showFileUpload = false"
-                class="text-gray-400 hover:text-gray-200 transition-colors"
+                class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
               >
                 <XMarkIcon class="w-4 h-4" />
               </button>
@@ -211,7 +211,7 @@
               @drop="handleFileDrop"
               @dragover.prevent
               @dragenter.prevent
-              class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-purple-500 transition-colors cursor-pointer"
+              class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-purple-500 transition-all duration-200 cursor-pointer"
               :class="{ 'border-purple-500 bg-purple-500/10': isDragging }"
             >
               <input
@@ -227,7 +227,7 @@
                 <p class="text-sm text-gray-300">
                   <button
                     @click="$refs.fileInput?.click()"
-                    class="text-purple-400 hover:text-purple-300 underline"
+                    class="text-purple-400 hover:text-purple-300 hover:border-b hover:border-purple-300 transition-all duration-200"
                   >
                     Dosya seç
                   </button>
@@ -245,13 +245,13 @@
               <button
                 @click="uploadFile"
                 :disabled="isUploadingFile"
-                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                class="px-3 py-1 bg-purple-600 hover:border-purple-400 text-white text-xs rounded-md transition-all duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed border border-transparent"
               >
                 {{ isUploadingFile ? 'Yükleniyor...' : 'Yükle' }}
               </button>
               <button
                 @click="selectedFile = null"
-                class="text-gray-400 hover:text-gray-200 transition-colors"
+                class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
               >
                 <XMarkIcon class="w-4 h-4" />
               </button>
@@ -259,15 +259,17 @@
           </div>
 
           <form @submit.prevent="sendMessage" class="relative">
-            <div class="relative flex items-center">
-              <input
+            <div class="relative flex items-end">
+              <textarea
                 v-model="newMessage"
                 ref="messageInput"
-                type="text"
                 placeholder="Proje fikrinizi detaylıca anlatın..."
                 :disabled="isLoading || !isConnected"
-                class="w-full pl-4 pr-20 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg"
-                @keydown.enter.prevent="sendMessage"
+                rows="2"
+                class="w-full pl-4 pr-20 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+                :style="{ maxHeight: '120px', minHeight: '48px' }"
+                @input="adjustTextareaHeight"
+                @keydown.enter.prevent="handleEnterKey"
               />
 
               <!-- Dosya Yükleme Butonu -->
@@ -275,7 +277,7 @@
                 type="button"
                 @click="showFileUpload = !showFileUpload"
                 :disabled="isLoading || !isConnected"
-                class="absolute right-12 p-2 text-gray-400 hover:text-purple-400 transition-all duration-200 disabled:text-gray-600 disabled:cursor-not-allowed"
+                class="absolute right-12 bottom-3 p-2 text-gray-400 hover:text-purple-400 hover:border hover:border-purple-400 rounded transition-all duration-200 disabled:text-gray-600 disabled:cursor-not-allowed"
                 title="Dosya Yükle"
               >
                 <PaperClipIcon class="w-4 h-4" />
@@ -284,7 +286,7 @@
               <button
                 type="submit"
                 :disabled="isLoading || newMessage.trim() === '' || !isConnected"
-                class="absolute right-2 p-2 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg hover:from-blue-700 hover:to-purple-800 transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                class="absolute right-2 bottom-3 p-2 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg hover:border-blue-400 transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed border border-transparent"
               >
                 <PaperAirplaneIcon class="w-4 h-4" />
               </button>
@@ -320,7 +322,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import {
   CpuChipIcon,
   UserIcon,
@@ -388,8 +390,30 @@ const focusInput = () => {
   nextTick(() => {
     if (messageInput.value) {
       messageInput.value.focus()
+      adjustTextareaHeight()
     }
   })
+}
+
+const adjustTextareaHeight = () => {
+  const textarea = messageInput.value
+  if (textarea) {
+    textarea.style.height = '48px'
+    const scrollHeight = textarea.scrollHeight
+    const minHeight = 48
+    const maxHeight = 120
+    let newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight)
+    textarea.style.height = newHeight + 'px'
+  }
+}
+
+const handleEnterKey = (event) => {
+  if (event.shiftKey) {
+    return
+  } else {
+    event.preventDefault()
+    sendMessage()
+  }
 }
 
 const formatDocumentDate = (dateString) => {
@@ -477,7 +501,6 @@ const openDocument = async (doc) => {
   }
 }
 
-// File upload functions
 const handleFileSelect = (event) => {
   const file = event.target.files[0]
   if (file) {
@@ -542,14 +565,12 @@ const uploadFile = async () => {
 
     const data = await response.json()
 
-    // Başarılı upload mesajını sohbete ekle
     messages.value.push({
       id: Date.now(),
       text: `📁 Dosya yüklendi: ${selectedFile.value.name}`,
       author: 'user'
     })
 
-    // AI'ın analiz sonucunu ekle
     messages.value.push({
       id: Date.now() + 1,
       text: data.analysis,
@@ -559,7 +580,6 @@ const uploadFile = async () => {
     selectedFile.value = null
     showFileUpload.value = false
 
-    // Analysis status'u güncelle
     await loadAnalysisStatus()
 
     showNotification('Dosya başarıyla yüklendi ve analiz edildi!', 'success')
@@ -683,7 +703,6 @@ const closeDocument = () => {
   documentContent.value = ''
 }
 
-
 onMounted(async () => {
   await checkConnection()
   await loadSessionDocuments()
@@ -692,8 +711,15 @@ onMounted(async () => {
 
   const connectionChecker = setInterval(checkConnection, 30000)
 
+  const unwatchMessage = watch(newMessage, () => {
+    nextTick(() => {
+      adjustTextareaHeight()
+    })
+  })
+
   onUnmounted(() => {
     clearInterval(connectionChecker)
+    unwatchMessage()
   })
 })
 </script>
@@ -749,10 +775,10 @@ input:focus {
 }
 
 button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  border-color: currentColor;
 }
 
 button:active:not(:disabled) {
-  transform: translateY(0);
+  transform: none;
 }
 </style>

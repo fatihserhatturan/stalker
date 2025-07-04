@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full bg-gray-900/50">
     <!-- Header -->
     <div class="bg-gray-800/80 backdrop-blur-md border-b border-gray-700/50 shadow-lg">
-      <div class="px-6 py-4">
+      <div class="px-6 py-4 h-[80px] ">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-xl shadow-lg">
@@ -18,7 +18,7 @@
             <div class="relative" ref="downloadDropdown">
               <button
                 @click="toggleDownloadMenu"
-                class="flex items-center space-x-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+                class="flex items-center space-x-1 px-3 py-2 bg-gray-700 border border-gray-600 hover:border-gray-400 text-white rounded-lg transition-colors text-sm"
               >
                 <ArrowDownTrayIcon class="w-4 h-4" />
                 <span>İndir</span>
@@ -31,7 +31,7 @@
                   <button
                     @click="downloadPDF"
                     :disabled="isGeneratingPDF"
-                    class="flex items-center space-x-2 w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="flex items-center space-x-2 w-full px-4 py-2 text-left text-sm text-gray-300 border border-transparent hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <DocumentIcon class="w-4 h-4" />
                     <span>{{ isGeneratingPDF ? 'PDF oluşturuluyor...' : 'PDF (.pdf)' }}</span>
@@ -39,7 +39,7 @@
                   <button
                     @click="downloadWord"
                     :disabled="isGeneratingWord"
-                    class="flex items-center space-x-2 w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="flex items-center space-x-2 w-full px-4 py-2 text-left text-sm text-gray-300 border border-transparent hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <DocumentTextIcon class="w-4 h-4" />
                     <span>{{ isGeneratingWord ? 'Word oluşturuluyor...' : 'Word (.docx)' }}</span>
@@ -50,14 +50,14 @@
 
             <button
               @click="copyToClipboard"
-              class="flex items-center space-x-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm"
+              class="flex items-center space-x-1 px-3 py-2 bg-gray-700 border border-gray-600 hover:border-gray-400 text-white rounded-lg transition-colors text-sm"
             >
               <ClipboardDocumentIcon class="w-4 h-4" />
               <span>Kopyala</span>
             </button>
             <button
               @click="$emit('close-document')"
-              class="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-lg transition-colors"
+              class="p-2 text-gray-400 border border-transparent hover:border-gray-500 rounded-lg transition-colors"
             >
               <XMarkIcon class="w-4 h-4" />
             </button>
@@ -85,17 +85,6 @@
 
       <div v-else class="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
         <div class="p-6">
-          <!-- Status indicator -->
-          <div class="flex items-center justify-between mb-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
-            <div class="flex items-center space-x-2">
-              <div class="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span class="text-sm text-gray-300">Doküman hazır</span>
-            </div>
-            <div class="text-sm text-gray-400">
-              {{ formatDate(new Date()) }}
-            </div>
-          </div>
-
           <!-- Rendered markdown content -->
           <div
             ref="documentContent"
@@ -251,15 +240,6 @@ const showNotification = (message, type = 'success') => {
   }, 3000)
 }
 
-const formatDate = (date) => {
-  return new Intl.DateTimeFormat('tr-TR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date)
-}
 
 const toggleDownloadMenu = () => {
   showDownloadMenu.value = !showDownloadMenu.value
@@ -469,7 +449,10 @@ const generateHTMLTemplate = (content) => {
 </html>`
 }
 
-
+const downloadWord = async () => {
+  showNotification('Word indirme özelliği henüz aktif değil', 'error')
+  showDownloadMenu.value = false
+}
 
 const downloadPDF = async () => {
   if (!props.documentContent) return
@@ -668,7 +651,8 @@ onUnmounted(() => {
 }
 
 .markdown-content :deep(.markdown-table-row) {
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .markdown-content :deep(.markdown-table-row:nth-child(even)) {
@@ -676,7 +660,7 @@ onUnmounted(() => {
 }
 
 .markdown-content :deep(.markdown-table-row:hover) {
-  background-color: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .markdown-content :deep(.markdown-td:not(:last-child)::after) {
