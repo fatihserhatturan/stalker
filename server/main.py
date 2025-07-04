@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.schemas import ChatRequest, ChatResponse, DocumentRequest, DocumentResponse
 from core.chain import (
     process_conversation,
-    generate_sample_document,
     generate_detailed_analysis_document,
     get_analysis_status
 )
@@ -86,31 +85,6 @@ async def get_session_analysis_status(session_id: str):
             detail=f"Analiz durumu alınırken hata oluştu: {str(e)}"
         )
 
-@app.post("/generate-document", response_model=DocumentResponse)
-async def generate_document(request: DocumentRequest):
-    """
-    Rastgele örnek doküman oluşturan endpoint.
-    """
-    try:
-        logger.info(f"Sample document generation request received for session: {request.session_id}")
-
-        document_content = await generate_sample_document()
-
-        logger.info(f"Sample document generated successfully for session: {request.session_id}")
-
-        return DocumentResponse(
-            document_content=document_content,
-            session_id=request.session_id,
-            document_type="markdown"
-        )
-
-    except Exception as e:
-        logger.error(f"Error in document generation endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Doküman oluşturulurken bir hata oluştu: {str(e)}"
-        )
-
 @app.post("/generate-analysis-document", response_model=DocumentResponse)
 async def generate_analysis_document(request: DocumentRequest):
     """
@@ -148,6 +122,7 @@ async def generate_analysis_document(request: DocumentRequest):
             status_code=500,
             detail=f"Analiz dokümanı oluşturulurken bir hata oluştu: {str(e)}"
         )
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

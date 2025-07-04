@@ -12,51 +12,6 @@
               <p class="text-sm text-gray-300">Proje analiz asistanınız</p>
             </div>
           </div>
-          <Menu as="div" class="relative">
-            <MenuButton class="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors">
-              <EllipsisVerticalIcon class="w-5 h-5" />
-            </MenuButton>
-            <transition
-              enter-active-class="transition duration-100 ease-out"
-              enter-from-class="transform scale-95 opacity-0"
-              enter-to-class="transform scale-100 opacity-100"
-              leave-active-class="transition duration-75 ease-in"
-              leave-from-class="transform scale-100 opacity-100"
-              leave-to-class="transform scale-95 opacity-0"
-            >
-              <MenuItems class="absolute right-0 mt-2 w-48 bg-gray-800 rounded-xl shadow-xl ring-1 ring-gray-700 ring-opacity-50 focus:outline-none z-10">
-                <div class="p-1">
-                  <MenuItem v-slot="{ active }">
-                    <button
-                      @click="copySessionId"
-                      :class="[active ? 'bg-gray-700' : '', 'group flex rounded-lg items-center w-full px-3 py-2 text-sm text-gray-200']"
-                    >
-                      <DocumentDuplicateIcon class="w-4 h-4 mr-3 text-gray-400" />
-                      Oturum ID'sini Kopyala
-                    </button>
-                  </MenuItem>
-                  <MenuItem v-slot="{ active }">
-                    <button
-                      @click="clearChat"
-                      :class="[active ? 'bg-red-600/20' : '', 'group flex rounded-lg items-center w-full px-3 py-2 text-sm text-red-400 hover:text-red-300']"
-                    >
-                      <TrashIcon class="w-4 h-4 mr-3" />
-                      Sohbeti Temizle
-                    </button>
-                  </MenuItem>
-                  <MenuItem v-slot="{ active }">
-                    <button
-                      @click="newSession"
-                      :class="[active ? 'bg-gray-700' : '', 'group flex rounded-lg items-center w-full px-3 py-2 text-sm text-gray-200']"
-                    >
-                      <PlusIcon class="w-4 h-4 mr-3 text-gray-400" />
-                      Yeni Oturum
-                    </button>
-                  </MenuItem>
-                </div>
-              </MenuItems>
-            </transition>
-          </Menu>
         </div>
       </div>
     </div>
@@ -138,7 +93,7 @@
             <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
               <div class="flex items-center space-x-2">
                 <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
-                <span class="text-xs text-gray-400 ml-2">Örnek doküman oluşturuluyor...</span>
+                <span class="text-xs text-gray-400 ml-2">Analiz dokümanı oluşturuluyor...</span>
               </div>
               <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
             </div>
@@ -154,21 +109,28 @@
       </div>
     </div>
 
-    <div class="bg-gray-900/60 backdrop-blur-md border-t border-gray-700/30 px-6 py-4">
+    <!-- Doküman Oluşturma Butonu -->
+    <div v-if="messages.length > 2" class="bg-gray-900/60 backdrop-blur-md border-t border-gray-700/30 px-6 py-4">
       <div class="max-w-4xl mx-auto">
         <div class="flex items-center justify-center mb-4">
           <button
-            @click="generateSampleDocument"
-            :disabled="isGeneratingDocument || !isConnected"
+            @click="generateAnalysisDocument"
+            :disabled="isGeneratingDocument || !isConnected || isLoading"
             class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
           >
             <DocumentTextIcon class="w-5 h-5" />
-            <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Örnek Doküman Oluştur' }}</span>
+            <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Analiz Dokümanı Oluştur' }}</span>
           </button>
+        </div>
+        <div class="text-center">
+          <p class="text-xs text-gray-400">
+            Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak
+          </p>
         </div>
       </div>
     </div>
 
+    <!-- Mesaj Giriş Alanı -->
     <div class="bg-gray-900/80 backdrop-blur-md border-t border-gray-700/50">
       <div class="max-w-4xl mx-auto px-6 py-4">
         <form @submit.prevent="sendMessage" class="relative">
@@ -190,21 +152,57 @@
               <PaperAirplaneIcon class="w-4 h-4" />
             </button>
           </div>
-
-          <div class="flex items-center justify-between mt-2 text-xs text-gray-400">
-            <span>Oturum: {{ sessionId.slice(-8) }}</span>
-            <div class="flex items-center space-x-4">
-              <span class="flex items-center space-x-1">
-                <div :class="['w-2 h-2 rounded-full', isConnected ? 'bg-green-400' : 'bg-red-400']"></div>
-                <span>{{ isConnected ? 'Bağlı' : 'Bağlantı yok' }}</span>
-              </span>
-              <span>Mesaj: {{ messages.length - 1 }}</span>
-            </div>
-          </div>
         </form>
       </div>
     </div>
 
+    <!-- Doküman Başarı Modal -->
+    <div
+      v-if="documentGenerated.show"
+      class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+      @click="closeDocumentModal"
+    >
+      <div
+        class="bg-gray-800 rounded-2xl p-6 max-w-md mx-4 shadow-2xl border border-gray-700"
+        @click.stop
+      >
+        <div class="text-center">
+          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+            <CheckIcon class="h-6 w-6 text-green-600" />
+          </div>
+          <h3 class="text-lg font-medium text-white mb-2">
+            Doküman Başarıyla Oluşturuldu!
+          </h3>
+          <p class="text-sm text-gray-300 mb-6">
+            Analiz dokümanınız sohbet geçmişinize dayanarak hazırlandı.
+          </p>
+          <div class="flex flex-col space-y-3">
+            <button
+              @click="downloadDocument"
+              class="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              <ArrowDownTrayIcon class="w-4 h-4" />
+              <span>Dokümanı İndir</span>
+            </button>
+            <button
+              @click="copyDocument"
+              class="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+            >
+              <ClipboardDocumentIcon class="w-4 h-4" />
+              <span>Panoya Kopyala</span>
+            </button>
+            <button
+              @click="closeDocumentModal"
+              class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            >
+              Kapat
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bildirim -->
     <div
       v-if="notification.show"
       :class="[
@@ -219,21 +217,16 @@
 
 <script setup>
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue'
 import {
   CpuChipIcon,
   UserIcon,
   PaperAirplaneIcon,
-  EllipsisVerticalIcon,
-  DocumentDuplicateIcon,
-  TrashIcon,
-  PlusIcon,
   ExclamationTriangleIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  CheckIcon,
+  ArrowDownTrayIcon,
+  ClipboardDocumentIcon
 } from '@heroicons/vue/24/outline'
-
-const router = useRouter()
 
 const messages = ref([
   {
@@ -254,6 +247,11 @@ const notification = ref({
   show: false,
   message: '',
   type: 'success'
+})
+
+const documentGenerated = ref({
+  show: false,
+  content: ''
 })
 
 const API_BASE_URL = 'http://localhost:8000'
@@ -360,14 +358,13 @@ const sendMessage = async () => {
   }
 }
 
-const generateSampleDocument = async () => {
+const generateAnalysisDocument = async () => {
   if (isGeneratingDocument.value || !isConnected.value) return
 
   isGeneratingDocument.value = true
-  scrollToBottom()
 
   try {
-    const response = await fetch(`${API_BASE_URL}/generate-document`, {
+    const response = await fetch(`${API_BASE_URL}/generate-analysis-document`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -384,77 +381,51 @@ const generateSampleDocument = async () => {
     }
 
     const data = await response.json()
-    console.log("Document Data:", data)
 
-    showNotification('Doküman başarıyla oluşturuldu! Yönlendiriliyor...', 'success')
+    documentGenerated.value = {
+      show: true,
+      content: data.document_content
+    }
 
-    setTimeout(() => {
-      router.push({
-        path: '/document',
-        query: { sessionId: sessionId.value }
-      })
-    }, 1000)
+    showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
 
   } catch (error) {
-    console.error("Document Generation Error:", error)
-
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      isConnected.value = false
-      showNotification('Backend sunucusuna bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.', 'error')
-    } else {
-      showNotification(`Doküman oluşturma hatası: ${error.message}`, 'error')
-    }
+    console.error("Document generation error:", error)
+    showNotification(`Doküman oluşturulurken hata: ${error.message}`, 'error')
   } finally {
     isGeneratingDocument.value = false
-    scrollToBottom()
   }
 }
 
-const copySessionId = async () => {
+const downloadDocument = () => {
+  if (!documentGenerated.value.content) return
+
+  const blob = new Blob([documentGenerated.value.content], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `analiz-dokumani-${new Date().toISOString().split('T')[0]}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  showNotification('Doküman indirildi!', 'success')
+}
+
+const copyDocument = async () => {
+  if (!documentGenerated.value.content) return
+
   try {
-    await navigator.clipboard.writeText(sessionId.value)
-    showNotification('Oturum ID\'si kopyalandı!', 'success')
-  } catch (error) {
-    showNotification('Kopyalama başarısız oldu', 'error')
+    await navigator.clipboard.writeText(documentGenerated.value.content)
+    showNotification('Doküman panoya kopyalandı!', 'success')
+  } catch (err) {
+    showNotification('Kopyalama işlemi başarısız oldu', 'error')
   }
 }
 
-const clearChat = async () => {
-  if (confirm('Sohbet geçmişini temizlemek istediğinizden emin misiniz?')) {
-    try {
-      await fetch(`${API_BASE_URL}/chat/${sessionId.value}`, {
-        method: 'DELETE'
-      })
-
-      messages.value = [
-        {
-          id: 1,
-          text: 'Merhaba! Ben projenizin ön analizini yapmak için buradayım. Proje fikrinizi detaylıca anlatırsanız, kapsamlı bir analiz hazırlayabilirim.',
-          author: 'ai'
-        }
-      ]
-
-      showNotification('Sohbet geçmişi temizlendi', 'success')
-      focusInput()
-    } catch (error) {
-      showNotification('Sohbet temizlenemedi', 'error')
-    }
-  }
-}
-
-const newSession = () => {
-  if (confirm('Yeni bir oturum başlatmak istediğinizden emin misiniz? Mevcut sohbet kaybolacak.')) {
-    sessionId.value = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    messages.value = [
-      {
-        id: 1,
-        text: 'Merhaba! Ben projenizin ön analizini yapmak için buradayım. Proje fikrinizi detaylıca anlatırsanız, kapsamlı bir analiz hazırlayabilirim.',
-        author: 'ai'
-      }
-    ]
-    showNotification('Yeni oturum başlatıldı', 'success')
-    focusInput()
-  }
+const closeDocumentModal = () => {
+  documentGenerated.value.show = false
 }
 
 onMounted(async () => {
