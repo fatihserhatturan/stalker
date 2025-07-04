@@ -21,15 +21,14 @@
               </div>
             </div>
 
-            <!-- Doküman varsa kapat butonu -->
-            <div v-if="showDocument" class="flex items-center space-x-2">
-              <button
-                @click="closeDocument"
-                class="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-              >
-                <XMarkIcon class="w-4 h-4" />
-                <span>Dokümanı Kapat</span>
-              </button>
+            <!-- İlerleme ve Doküman Kontrolleri -->
+            <div class="flex items-center space-x-3">
+              <!-- İlerleme Göstergesi -->
+              <div v-if="analysisStatus && messages.length > 1" class="flex items-center space-x-2 px-3 py-1 bg-gray-800/60 rounded-lg border border-gray-700/30">
+                <div class="w-2 h-2 rounded-full" :class="getStatusColor()"></div>
+                <span class="text-xs text-gray-300">{{ Math.round(analysisStatus.completion_rate) }}%</span>
+              </div>
+
             </div>
           </div>
         </div>
@@ -238,7 +237,6 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
   DocumentTextIcon,
-  XMarkIcon
 } from '@heroicons/vue/24/outline'
 import DocumentViewer from './DocumentViewer.vue'
 
@@ -261,6 +259,7 @@ const messageInput = ref(null)
 const showDocument = ref(false)
 const documentContent = ref('')
 const sessionDocuments = ref([])
+const analysisStatus = ref(null)
 
 const notification = ref({
   show: false,
@@ -315,6 +314,30 @@ const checkConnection = async () => {
     isConnected.value = false
     return false
   }
+}
+
+const loadAnalysisStatus = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/analysis-status/${sessionId.value}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      analysisStatus.value = data.status
+    }
+  } catch (error) {
+    console.error('Error loading analysis status:', error)
+  }
+}
+
+const getStatusColor = () => {
+  if (!analysisStatus.value) return 'bg-gray-500'
+  const rate = analysisStatus.value.completion_rate
+  if (rate < 30) return 'bg-red-400'
+  if (rate < 70) return 'bg-yellow-400'
+  return 'bg-green-400'
 }
 
 const loadSessionDocuments = async () => {
@@ -395,6 +418,9 @@ const sendMessage = async () => {
       author: 'ai'
     })
 
+    // Analysis status'u güncelle
+    await loadAnalysisStatus()
+
     isConnected.value = true
 
   } catch (error) {
@@ -468,6 +494,7 @@ const closeDocument = () => {
 onMounted(async () => {
   await checkConnection()
   await loadSessionDocuments()
+  await loadAnalysisStatus()
   focusInput()
 
   const connectionChecker = setInterval(checkConnection, 30000)
