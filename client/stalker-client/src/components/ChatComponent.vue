@@ -1,205 +1,192 @@
 <template>
-  <div class="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-    <div class="relative bg-gray-900/80 backdrop-blur-md border-b border-gray-700/50 shadow-lg">
-      <div class="max-w-4xl mx-auto px-6 py-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-3">
-            <div class="p-2 bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl shadow-lg">
-              <CpuChipIcon class="w-6 h-6 text-white" />
+  <div class="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+    <!-- Chat Bölümü -->
+    <div
+      :class="[
+        'flex flex-col transition-all duration-500 ease-in-out',
+        showDocument ? 'w-1/2' : 'w-full'
+      ]"
+    >
+      <!-- Header -->
+      <div class="relative bg-gray-900/80 backdrop-blur-md border-b border-gray-700/50 shadow-lg">
+        <div class="max-w-4xl mx-auto px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="p-2 bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl shadow-lg">
+                <CpuChipIcon class="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 class="text-xl font-semibold text-white">AI Business Analyst</h1>
+                <p class="text-sm text-gray-300">Proje analiz asistanınız</p>
+              </div>
             </div>
-            <div>
-              <h1 class="text-xl font-semibold text-white">AI Business Analyst</h1>
-              <p class="text-sm text-gray-300">Proje analiz asistanınız</p>
+
+            <!-- Doküman varsa kapat butonu -->
+            <div v-if="showDocument" class="flex items-center space-x-2">
+              <button
+                @click="closeDocument"
+                class="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                <XMarkIcon class="w-4 h-4" />
+                <span>Dokümanı Kapat</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="flex-1 overflow-hidden">
-      <div class="h-full max-w-4xl mx-auto">
-        <div
-          ref="messageList"
-          class="h-full overflow-y-auto px-6 py-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-        >
-          <div class="space-y-6">
-            <div
-              v-for="msg in messages"
-              :key="msg.id"
-              :class="['flex items-start space-x-4', msg.author === 'user' ? 'flex-row-reverse space-x-reverse' : '']"
-            >
-              <div class="flex-shrink-0">
+      <!-- Mesajlar -->
+      <div class="flex-1 overflow-hidden">
+        <div class="h-full max-w-4xl mx-auto">
+          <div
+            ref="messageList"
+            class="h-full overflow-y-auto px-6 py-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+          >
+            <div class="space-y-6">
+              <div
+                v-for="msg in messages"
+                :key="msg.id"
+                :class="['flex items-start space-x-4', msg.author === 'user' ? 'flex-row-reverse space-x-reverse' : '']"
+              >
+                <div class="flex-shrink-0">
+                  <div
+                    :class="[
+                      'w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200',
+                      msg.author === 'ai'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-700 text-white'
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white'
+                    ]"
+                  >
+                    <UserIcon v-if="msg.author === 'user'" class="w-5 h-5" />
+                    <CpuChipIcon v-else class="w-5 h-5" />
+                  </div>
+                </div>
+
                 <div
                   :class="[
-                    'w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200',
+                    'relative max-w-2xl rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 hover:shadow-xl',
                     msg.author === 'ai'
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-700 text-white'
+                      ? 'bg-gray-800 border border-gray-700/50 text-gray-100'
                       : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white'
                   ]"
                 >
-                  <UserIcon v-if="msg.author === 'user'" class="w-5 h-5" />
-                  <CpuChipIcon v-else class="w-5 h-5" />
+                  <p :class="['text-sm leading-relaxed whitespace-pre-wrap', msg.author === 'ai' ? 'text-gray-100' : 'text-white']">
+                    {{ msg.text }}
+                  </p>
+                  <div
+                    :class="[
+                      'absolute top-4 w-2 h-2 transform rotate-45',
+                      msg.author === 'ai'
+                        ? '-left-1 bg-gray-800 border-l border-b border-gray-700/50'
+                        : '-right-1 bg-gradient-to-r from-emerald-600 to-teal-700'
+                    ]"
+                  ></div>
                 </div>
               </div>
+            </div>
 
-              <div
-                :class="[
-                  'relative max-w-2xl rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 hover:shadow-xl',
-                  msg.author === 'ai'
-                    ? 'bg-gray-800 border border-gray-700/50 text-gray-100'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white'
-                ]"
+            <div v-if="isLoading" class="flex items-start space-x-4">
+              <div class="flex-shrink-0">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center shadow-lg">
+                  <CpuChipIcon class="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
+                <div class="flex items-center space-x-2">
+                  <div class="flex space-x-1">
+                    <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
+                    <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.15s;"></div>
+                    <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.3s;"></div>
+                  </div>
+                  <span class="text-xs text-gray-400 ml-2">AI analiz yapıyor...</span>
+                </div>
+                <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
+              </div>
+            </div>
+
+            <div v-if="isGeneratingDocument" class="flex items-start space-x-4">
+              <div class="flex-shrink-0">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg">
+                  <DocumentTextIcon class="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
+                <div class="flex items-center space-x-2">
+                  <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
+                  <span class="text-xs text-gray-400 ml-2">Analiz dokümanı oluşturuluyor...</span>
+                </div>
+                <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
+              </div>
+            </div>
+
+            <div v-if="!isConnected" class="text-center py-4">
+              <div class="inline-flex items-center px-4 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm">
+                <ExclamationTriangleIcon class="w-4 h-4 mr-2" />
+                Backend'e bağlantı kurulamıyor. Lütfen sunucunun çalıştığından emin olun.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Doküman Oluşturma Butonu -->
+      <div v-if="messages.length > 2 && !showDocument" class="bg-gray-900/60 backdrop-blur-md border-t border-gray-700/30 px-6 py-4">
+        <div class="max-w-4xl mx-auto">
+          <div class="flex items-center justify-center mb-4">
+            <button
+              @click="generateAnalysisDocument"
+              :disabled="isGeneratingDocument || !isConnected || isLoading"
+              class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+            >
+              <DocumentTextIcon class="w-5 h-5" />
+              <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Analiz Dokümanı Oluştur' }}</span>
+            </button>
+          </div>
+          <div class="text-center">
+            <p class="text-xs text-gray-400">
+              Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mesaj Giriş Alanı -->
+      <div class="bg-gray-900/80 backdrop-blur-md border-t border-gray-700/50">
+        <div class="max-w-4xl mx-auto px-6 py-4">
+          <form @submit.prevent="sendMessage" class="relative">
+            <div class="relative flex items-center">
+              <input
+                v-model="newMessage"
+                ref="messageInput"
+                type="text"
+                placeholder="Proje fikrinizi detaylıca anlatın..."
+                :disabled="isLoading || !isConnected"
+                class="w-full pl-4 pr-12 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg"
+                @keydown.enter.prevent="sendMessage"
+              />
+              <button
+                type="submit"
+                :disabled="isLoading || newMessage.trim() === '' || !isConnected"
+                class="absolute right-2 p-2 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg hover:from-blue-700 hover:to-purple-800 transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
               >
-                <p :class="['text-sm leading-relaxed whitespace-pre-wrap', msg.author === 'ai' ? 'text-gray-100' : 'text-white']">
-                  {{ msg.text }}
-                </p>
-                <div
-                  :class="[
-                    'absolute top-4 w-2 h-2 transform rotate-45',
-                    msg.author === 'ai'
-                      ? '-left-1 bg-gray-800 border-l border-b border-gray-700/50'
-                      : '-right-1 bg-gradient-to-r from-emerald-600 to-teal-700'
-                  ]"
-                ></div>
-              </div>
+                <PaperAirplaneIcon class="w-4 h-4" />
+              </button>
             </div>
-          </div>
-
-          <div v-if="isLoading" class="flex items-start space-x-4">
-            <div class="flex-shrink-0">
-              <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center shadow-lg">
-                <CpuChipIcon class="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
-              <div class="flex items-center space-x-2">
-                <div class="flex space-x-1">
-                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
-                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.15s;"></div>
-                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.3s;"></div>
-                </div>
-                <span class="text-xs text-gray-400 ml-2">AI analiz yapıyor...</span>
-              </div>
-              <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
-            </div>
-          </div>
-
-          <div v-if="isGeneratingDocument" class="flex items-start space-x-4">
-            <div class="flex-shrink-0">
-              <div class="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg">
-                <DocumentTextIcon class="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
-              <div class="flex items-center space-x-2">
-                <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
-                <span class="text-xs text-gray-400 ml-2">Analiz dokümanı oluşturuluyor...</span>
-              </div>
-              <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
-            </div>
-          </div>
-
-          <div v-if="!isConnected" class="text-center py-4">
-            <div class="inline-flex items-center px-4 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm">
-              <ExclamationTriangleIcon class="w-4 h-4 mr-2" />
-              Backend'e bağlantı kurulamıyor. Lütfen sunucunun çalıştığından emin olun.
-            </div>
-          </div>
+          </form>
         </div>
       </div>
     </div>
 
-    <!-- Doküman Oluşturma Butonu -->
-    <div v-if="messages.length > 2" class="bg-gray-900/60 backdrop-blur-md border-t border-gray-700/30 px-6 py-4">
-      <div class="max-w-4xl mx-auto">
-        <div class="flex items-center justify-center mb-4">
-          <button
-            @click="generateAnalysisDocument"
-            :disabled="isGeneratingDocument || !isConnected || isLoading"
-            class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
-          >
-            <DocumentTextIcon class="w-5 h-5" />
-            <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Analiz Dokümanı Oluştur' }}</span>
-          </button>
-        </div>
-        <div class="text-center">
-          <p class="text-xs text-gray-400">
-            Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Mesaj Giriş Alanı -->
-    <div class="bg-gray-900/80 backdrop-blur-md border-t border-gray-700/50">
-      <div class="max-w-4xl mx-auto px-6 py-4">
-        <form @submit.prevent="sendMessage" class="relative">
-          <div class="relative flex items-center">
-            <input
-              v-model="newMessage"
-              ref="messageInput"
-              type="text"
-              placeholder="Proje fikrinizi detaylıca anlatın..."
-              :disabled="isLoading || !isConnected"
-              class="w-full pl-4 pr-12 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg"
-              @keydown.enter.prevent="sendMessage"
-            />
-            <button
-              type="submit"
-              :disabled="isLoading || newMessage.trim() === '' || !isConnected"
-              class="absolute right-2 p-2 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg hover:from-blue-700 hover:to-purple-800 transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
-            >
-              <PaperAirplaneIcon class="w-4 h-4" />
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Doküman Başarı Modal -->
+    <!-- Document Viewer Bölümü -->
     <div
-      v-if="documentGenerated.show"
-      class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-      @click="closeDocumentModal"
+      v-if="showDocument"
+      class="w-1/2 border-l border-gray-700/50 bg-gray-900/50 backdrop-blur-md transition-all duration-500 ease-in-out transform translate-x-0"
     >
-      <div
-        class="bg-gray-800 rounded-2xl p-6 max-w-md mx-4 shadow-2xl border border-gray-700"
-        @click.stop
-      >
-        <div class="text-center">
-          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-            <CheckIcon class="h-6 w-6 text-green-600" />
-          </div>
-          <h3 class="text-lg font-medium text-white mb-2">
-            Doküman Başarıyla Oluşturuldu!
-          </h3>
-          <p class="text-sm text-gray-300 mb-6">
-            Analiz dokümanınız sohbet geçmişinize dayanarak hazırlandı.
-          </p>
-          <div class="flex flex-col space-y-3">
-            <button
-              @click="downloadDocument"
-              class="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              <ArrowDownTrayIcon class="w-4 h-4" />
-              <span>Dokümanı İndir</span>
-            </button>
-            <button
-              @click="copyDocument"
-              class="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-            >
-              <ClipboardDocumentIcon class="w-4 h-4" />
-              <span>Panoya Kopyala</span>
-            </button>
-            <button
-              @click="closeDocumentModal"
-              class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              Kapat
-            </button>
-          </div>
-        </div>
-      </div>
+      <DocumentViewer
+        :document-content="documentContent"
+        :session-id="sessionId"
+        @close-document="closeDocument"
+      />
     </div>
 
     <!-- Bildirim -->
@@ -223,10 +210,9 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
   DocumentTextIcon,
-  CheckIcon,
-  ArrowDownTrayIcon,
-  ClipboardDocumentIcon
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
+import DocumentViewer from './DocumentViewer.vue'
 
 const messages = ref([
   {
@@ -243,15 +229,14 @@ const sessionId = ref(`session_${Date.now()}_${Math.random().toString(36).substr
 const messageList = ref(null)
 const messageInput = ref(null)
 
+// Document viewer state
+const showDocument = ref(false)
+const documentContent = ref('')
+
 const notification = ref({
   show: false,
   message: '',
   type: 'success'
-})
-
-const documentGenerated = ref({
-  show: false,
-  content: ''
 })
 
 const API_BASE_URL = 'http://localhost:8000'
@@ -382,10 +367,9 @@ const generateAnalysisDocument = async () => {
 
     const data = await response.json()
 
-    documentGenerated.value = {
-      show: true,
-      content: data.document_content
-    }
+    // Dokümanı sağ panelde göster
+    documentContent.value = data.document_content
+    showDocument.value = true
 
     showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
 
@@ -397,35 +381,9 @@ const generateAnalysisDocument = async () => {
   }
 }
 
-const downloadDocument = () => {
-  if (!documentGenerated.value.content) return
-
-  const blob = new Blob([documentGenerated.value.content], { type: 'text/markdown' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `analiz-dokumani-${new Date().toISOString().split('T')[0]}.md`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-
-  showNotification('Doküman indirildi!', 'success')
-}
-
-const copyDocument = async () => {
-  if (!documentGenerated.value.content) return
-
-  try {
-    await navigator.clipboard.writeText(documentGenerated.value.content)
-    showNotification('Doküman panoya kopyalandı!', 'success')
-  } catch (err) {
-    showNotification('Kopyalama işlemi başarısız oldu', 'error')
-  }
-}
-
-const closeDocumentModal = () => {
-  documentGenerated.value.show = false
+const closeDocument = () => {
+  showDocument.value = false
+  documentContent.value = ''
 }
 
 onMounted(async () => {

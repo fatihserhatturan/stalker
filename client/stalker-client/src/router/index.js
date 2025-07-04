@@ -1,18 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ChatComponent from '../components/ChatComponent.vue'
-import DocumentViewer from '../components/DocumentViewer.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Chat',
     component: ChatComponent
-  },
-  {
-    path: '/document',
-    name: 'Document',
-    component: DocumentViewer
   }
+  // DocumentViewer artık ayrı bir route değil, ChatComponent içinde kullanılıyor
 ]
 
 const router = createRouter({
