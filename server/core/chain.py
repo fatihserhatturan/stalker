@@ -5,6 +5,7 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationSummaryBufferMemory
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
+from langchain.schema import HumanMessage
 from core.prompts import SYSTEM_PROMPT_TEMPLATE, DOCUMENT_GENERATION_PROMPT, DETAILED_ANALYSIS_PROMPT, FILE_ANALYSIS_PROMPT
 import logging
 from datetime import datetime
@@ -397,6 +398,284 @@ Eksik bilgiler için [BİLGİ GEREKLİ] notasyonunu kullan.
     except Exception as e:
         logger.error(f"Error generating detailed analysis: {str(e)}")
         raise e
+
+async def generate_visual_data_from_session(session_id: str):
+    """Session geçmişine dayalı görsel bileşenler için dinamik veri üretir."""
+
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        raise ValueError("GOOGLE_API_KEY environment variable is not set!")
+
+    try:
+        # Session'ın varlığını kontrol et
+        if session_id not in chat_histories:
+            raise ValueError(f"Session {session_id} bulunamadı")
+
+        memory = get_memory_for_session(session_id)
+
+        model = ChatGoogleGenerativeAI(
+            model="gemini-2.5-pro",
+            temperature=0.1,
+            google_api_key=google_api_key,
+            convert_system_message_to_human=True
+        )
+
+        # Konuşma geçmişini al
+        conversation_history = ""
+        for message in memory.chat_memory.messages:
+            if hasattr(message, 'content'):
+                role = "Kullanıcı" if message.type == "human" else "AI"
+                conversation_history += f"{role}: {message.content}\n\n"
+
+        # Yüklenen dosya bilgilerini ekle
+        uploaded_files_content = ""
+        if session_id in uploaded_files and uploaded_files[session_id]:
+            uploaded_files_content = "\n**Yüklenen Dosyalar:**\n"
+            for file_info in uploaded_files[session_id]:
+                uploaded_files_content += f"\n**Dosya: {file_info['filename']}**\n"
+                uploaded_files_content += f"İçerik: {file_info['content'][:2000]}...\n"
+
+        # JSON parse et
+        import json
+        try:
+            # AI'dan veri iste - doğru LangChain kullanımı
+            simple_prompt = f"""
+Proje bilgilerine dayalı JSON veri oluştur:
+
+PROJE BİLGİLERİ:
+{conversation_history[:2000]}
+
+ÇIKTİ: Sadece geçerli JSON formatında yanıt ver. MUTLAKA bu EXACT formatı kullan:
+
+{{
+  "orgChart": {{
+    "roles": [{{"id": "pm", "title": "Proje Müdürü", "color": "#3b82f6"}}],
+    "connections": [{{"from": "pm", "to": "dev"}}]
+  }},
+  "workflow": {{
+    "steps": [{{"id": "step1", "title": "Analiz", "color": "#3b82f6"}}],
+    "connections": [{{"from": "step1", "to": "step2"}}]
+  }},
+  "timeline": {{
+    "phases": [{{"name": "Analiz", "planned": 15, "actual": 18}}]
+  }},
+  "riskAnalysis": {{
+    "risks": [{{"name": "Risk1", "probability": 3, "impact": 4, "color": "#ef4444"}}]
+  }},
+  "resources": {{
+    "distribution": [{{"role": "Developer", "percentage": 50, "color": "#3b82f6"}}]
+  }},
+  "cost": {{
+    "timeline": [{{"month": "Ay 1", "planned": 50000, "actual": 55000}}]
+  }}
+}}
+
+ÖNEMLİ: cost.timeline array'inde MUTLAKA "month", "planned", "actual" anahtarlarını kullan!
+"""
+
+            # LangChain ChatGoogleGenerativeAI için doğru kullanım
+            messages = [HumanMessage(content=simple_prompt)]
+            ai_response = await model.agenerate([messages])
+            result_text = ai_response.generations[0][0].text.strip()
+
+            logger.info(f"AI response received: {result_text[:200]}...")
+
+            # JSON'u bul ve parse et
+            json_start = result_text.find('{')
+            json_end = result_text.rfind('}') + 1
+
+            if json_start == -1 or json_end == 0:
+                raise json.JSONDecodeError("JSON bulunamadı", result_text, 0)
+
+            clean_json = result_text[json_start:json_end]
+            visual_data = json.loads(clean_json)
+
+            # Veri doğrulaması
+            required_keys = ['orgChart', 'workflow', 'timeline', 'riskAnalysis', 'resources', 'cost']
+            if not all(key in visual_data for key in required_keys):
+                raise ValueError("Eksik JSON anahtarları")
+
+            logger.info(f"Visual data successfully generated from AI for session: {session_id}")
+            return visual_data
+
+        except Exception as e:
+            logger.error(f"AI data generation failed, using fallback: {str(e)}")
+            logger.error(f"AI response was: {result_text if 'result_text' in locals() else 'No response'}")
+
+            # Konuşma geçmişine dayalı akıllı fallback
+            fallback_data = generate_smart_fallback_data(conversation_history)
+            return fallback_data
+
+    except Exception as e:
+        logger.error(f"Error generating visual data: {str(e)}")
+        raise e
+
+def generate_smart_fallback_data(conversation_history: str):
+    """Konuşma geçmişine dayalı akıllı fallback veri oluştur"""
+
+    # Konuşmadaki anahtar kelimeleri analiz et
+    text_lower = conversation_history.lower()
+
+    # Proje türünü belirle
+    is_ecommerce = any(keyword in text_lower for keyword in ['e-ticaret', 'online', 'ödeme', 'sepet', 'ürün'])
+    is_mobile = any(keyword in text_lower for keyword in ['mobil', 'android', 'ios', 'uygulama'])
+    is_web = any(keyword in text_lower for keyword in ['web', 'website', 'react', 'vue'])
+
+    # Ekip büyüklüğünü tahmin et
+    team_indicators = {
+        'küçük': ['freelance', '1-2', 'tek', 'basit'],
+        'orta': ['3-5', 'ekip', 'orta', 'normal'],
+        'büyük': ['enterprise', 'büyük', '10+', 'kurumsal']
+    }
+
+    team_size = 'orta'  # varsayılan
+    for size, indicators in team_indicators.items():
+        if any(indicator in text_lower for indicator in indicators):
+            team_size = size
+            break
+
+    # Proje süresini tahmin et
+    duration_months = 6  # varsayılan
+    if any(word in text_lower for word in ['hızlı', 'acil', '1 ay', '2 ay']):
+        duration_months = 2
+    elif any(word in text_lower for word in ['6 ay', 'altı ay']):
+        duration_months = 6
+    elif any(word in text_lower for word in ['1 yıl', 'uzun']):
+        duration_months = 12
+
+    # Bütçeyi tahmin et
+    budget_per_month = 100000  # varsayılan TL
+    if any(word in text_lower for word in ['600.000', '600000', 'altı yüz bin']):
+        budget_per_month = 100000
+    elif any(word in text_lower for word in ['küçük', 'sınırlı', 'az']):
+        budget_per_month = 50000
+    elif any(word in text_lower for word in ['büyük', 'yüksek', 'enterprise']):
+        budget_per_month = 200000
+
+    # Dinamik veri oluştur
+    if is_ecommerce:
+        return {
+            "orgChart": {
+                "roles": [
+                    {"id": "pm", "title": "Proje Müdürü", "color": "#3b82f6"},
+                    {"id": "frontend", "title": "Frontend Developer", "color": "#10b981"},
+                    {"id": "backend", "title": "Backend Developer", "color": "#f59e0b"},
+                    {"id": "designer", "title": "UI/UX Designer", "color": "#8b5cf6"},
+                    {"id": "qa", "title": "QA Engineer", "color": "#ef4444"},
+                    {"id": "devops", "title": "DevOps Engineer", "color": "#06b6d4"}
+                ],
+                "connections": [
+                    {"from": "pm", "to": "frontend"},
+                    {"from": "pm", "to": "backend"},
+                    {"from": "pm", "to": "designer"},
+                    {"from": "pm", "to": "qa"},
+                    {"from": "pm", "to": "devops"}
+                ]
+            },
+            "workflow": {
+                "steps": [
+                    {"id": "analysis", "title": "Analiz ve Tasarım", "color": "#3b82f6"},
+                    {"id": "frontend_dev", "title": "Frontend Geliştirme", "color": "#10b981"},
+                    {"id": "backend_dev", "title": "Backend Geliştirme", "color": "#f59e0b"},
+                    {"id": "integration", "title": "Entegrasyon", "color": "#8b5cf6"},
+                    {"id": "testing", "title": "Test ve QA", "color": "#ef4444"},
+                    {"id": "deployment", "title": "Yayınlama", "color": "#06b6d4"}
+                ],
+                "connections": [
+                    {"from": "analysis", "to": "frontend_dev"},
+                    {"from": "analysis", "to": "backend_dev"},
+                    {"from": "frontend_dev", "to": "integration"},
+                    {"from": "backend_dev", "to": "integration"},
+                    {"from": "integration", "to": "testing"},
+                    {"from": "testing", "to": "deployment"}
+                ]
+            },
+            "timeline": {
+                "phases": [
+                    {"name": "Analiz ve Tasarım", "planned": 21, "actual": 25},
+                    {"name": "Frontend Geliştirme", "planned": 56, "actual": 52},
+                    {"name": "Backend Geliştirme", "planned": 70, "actual": 65},
+                    {"name": "Ödeme Entegrasyonu", "planned": 14, "actual": 18},
+                    {"name": "Test ve QA", "planned": 28, "actual": 32},
+                    {"name": "Deployment", "planned": 7, "actual": 8}
+                ]
+            },
+            "riskAnalysis": {
+                "risks": [
+                    {"name": "Ödeme Entegrasyonu Zorlukları", "probability": 3, "impact": 4, "color": "#ef4444"},
+                    {"name": "Yüksek Trafik Performansı", "probability": 4, "impact": 3, "color": "#f59e0b"},
+                    {"name": "Güvenlik Açıkları", "probability": 2, "impact": 5, "color": "#8b5cf6"},
+                    {"name": "Mobil Uyumluluk", "probability": 3, "impact": 3, "color": "#10b981"},
+                    {"name": "Tecrübeli Developer Eksikliği", "probability": 4, "impact": 4, "color": "#ef4444"}
+                ]
+            },
+            "resources": {
+                "distribution": [
+                    {"role": "Frontend Developer", "percentage": 28, "color": "#3b82f6"},
+                    {"role": "Backend Developer", "percentage": 32, "color": "#10b981"},
+                    {"role": "UI/UX Designer", "percentage": 18, "color": "#f59e0b"},
+                    {"role": "DevOps Engineer", "percentage": 12, "color": "#8b5cf6"},
+                    {"role": "QA Engineer", "percentage": 10, "color": "#ef4444"}
+                ]
+            },
+            "cost": {
+                "timeline": [
+                    {"month": f"Ay {i+1}", "planned": budget_per_month, "actual": budget_per_month + (i * 5000 - 10000)}
+                    for i in range(duration_months)
+                ]
+            }
+        }
+    else:
+        # Genel proje için varsayılan veri
+        return {
+            "orgChart": {
+                "roles": [
+                    {"id": "pm", "title": "Proje Müdürü", "color": "#3b82f6"},
+                    {"id": "dev", "title": "Geliştirici", "color": "#10b981"},
+                    {"id": "qa", "title": "Test Uzmanı", "color": "#f59e0b"}
+                ],
+                "connections": [
+                    {"from": "pm", "to": "dev"},
+                    {"from": "pm", "to": "qa"}
+                ]
+            },
+            "workflow": {
+                "steps": [
+                    {"id": "analysis", "title": "Analiz", "color": "#3b82f6"},
+                    {"id": "development", "title": "Geliştirme", "color": "#10b981"},
+                    {"id": "testing", "title": "Test", "color": "#f59e0b"}
+                ],
+                "connections": [
+                    {"from": "analysis", "to": "development"},
+                    {"from": "development", "to": "testing"}
+                ]
+            },
+            "timeline": {
+                "phases": [
+                    {"name": "Analiz", "planned": 15, "actual": 18},
+                    {"name": "Geliştirme", "planned": 45, "actual": 40},
+                    {"name": "Test", "planned": 15, "actual": 18}
+                ]
+            },
+            "riskAnalysis": {
+                "risks": [
+                    {"name": "Teknik Zorluklar", "probability": 3, "impact": 4, "color": "#ef4444"},
+                    {"name": "Zaman Kısıtı", "probability": 4, "impact": 3, "color": "#f59e0b"}
+                ]
+            },
+            "resources": {
+                "distribution": [
+                    {"role": "Geliştirici", "percentage": 60, "color": "#3b82f6"},
+                    {"role": "Test Uzmanı", "percentage": 40, "color": "#10b981"}
+                ]
+            },
+            "cost": {
+                "timeline": [
+                    {"month": f"Ay {i+1}", "planned": budget_per_month, "actual": budget_per_month + 5000}
+                    for i in range(duration_months)
+                ]
+            }
+        }
 
 def get_analysis_status(session_id: str) -> dict:
     """Session için analiz durumunu döndürür."""

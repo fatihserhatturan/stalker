@@ -5,6 +5,7 @@ from core.schemas import ChatRequest, ChatResponse, DocumentRequest, DocumentRes
 from core.chain import (
     process_conversation,
     generate_detailed_analysis_document,
+    generate_visual_data_from_session,  # Bu satırı ekleyin
     get_analysis_status,
     get_session_documents,
     get_document_by_id,
@@ -220,6 +221,53 @@ async def generate_analysis_document(request: DocumentRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Analiz dokümanı oluşturulurken bir hata oluştu: {str(e)}"
+        )
+
+@app.post("/generate-visual-data")
+async def generate_visual_data(request: ChatRequest):
+    """
+    Session konuşma geçmişine dayalı görsel bileşenler için dinamik veri üretir.
+    """
+    try:
+        logger.info(f"Visual data generation request for session: {request.session_id}")
+
+        visual_data = await generate_visual_data_from_session(request.session_id)
+
+        # Visual data'yı detaylı logla
+        logger.info(f"Generated visual data structure for session {request.session_id}:")
+        logger.info(f"- orgChart: {len(visual_data.get('orgChart', {}).get('roles', []))} roles, {len(visual_data.get('orgChart', {}).get('connections', []))} connections")
+        logger.info(f"- workflow: {len(visual_data.get('workflow', {}).get('steps', []))} steps, {len(visual_data.get('workflow', {}).get('connections', []))} connections")
+        logger.info(f"- timeline: {len(visual_data.get('timeline', {}).get('phases', []))} phases")
+        logger.info(f"- riskAnalysis: {len(visual_data.get('riskAnalysis', {}).get('risks', []))} risks")
+        logger.info(f"- resources: {len(visual_data.get('resources', {}).get('distribution', []))} resource types")
+        logger.info(f"- cost: {len(visual_data.get('cost', {}).get('timeline', []))} cost periods")
+
+        # Cost verilerini detaylı logla
+        cost_data = visual_data.get('cost', {}).get('timeline', [])
+        if cost_data:
+            logger.info(f"Cost timeline details:")
+            for i, cost_item in enumerate(cost_data[:3]):  # İlk 3 ayı logla
+                logger.info(f"  {cost_item.get('month', f'Period {i+1}')}: Planned={cost_item.get('planned', 'N/A')}, Actual={cost_item.get('actual', 'N/A')}")
+        else:
+            logger.warning(f"No cost data found in visual_data for session {request.session_id}")
+
+        # Tam veri yapısını logla (sadece anahtarları)
+        logger.info(f"Visual data keys: {list(visual_data.keys())}")
+
+        logger.info(f"Visual data generated successfully for session: {request.session_id}")
+
+        return {
+            "session_id": request.session_id,
+            "visual_data": visual_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in visual data generation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Görsel veri üretilirken hata oluştu: {str(e)}"
         )
 
 

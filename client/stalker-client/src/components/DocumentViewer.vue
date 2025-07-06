@@ -66,6 +66,59 @@
       </div>
     </div>
 
+    <!-- Görsel Öğeler Tıklanabilir Alan -->
+    <div class="border-b border-gray-700/50">
+      <button
+        @click="showVisualComponents = !showVisualComponents"
+        class="w-full px-6 py-4 bg-gray-800/40 hover:bg-gray-800/60 border-b border-gray-700/30 transition-all duration-300 group"
+      >
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="p-2 bg-gradient-to-r from-purple-600 to-pink-700 rounded-lg group-hover:scale-110 transition-transform duration-200">
+              <ChartBarIcon class="w-5 h-5 text-white" />
+            </div>
+            <div class="text-left">
+              <h3 class="text-white font-medium">Görsel Öğeler ve Analizler</h3>
+              <p class="text-gray-400 text-sm">
+                {{ visualData ? 'Dinamik verilerle oluşturulmuş grafikler ve şemalar' : 'Grafikler, şemalar ve analiz görselleri' }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <div v-if="visualData" class="px-2 py-1 bg-emerald-600/20 text-emerald-400 rounded text-xs">
+              Dinamik
+            </div>
+            <span class="text-xs text-gray-500">
+              {{ showVisualComponents ? 'Gizle' : 'Göster' }}
+            </span>
+            <div
+              :class="[
+                'transform transition-transform duration-300',
+                showVisualComponents ? 'rotate-180' : 'rotate-0'
+              ]"
+            >
+              <ChevronDownIcon class="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
+        </div>
+      </button>
+
+      <!-- Görsel Öğeler İçeriği -->
+      <div
+        :class="[
+          'overflow-hidden transition-all duration-500 ease-in-out',
+          showVisualComponents ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+        ]"
+      >
+        <div class="p-6 bg-gray-800/20">
+          <VisualComponents
+            :visual-data="visualData"
+            @close="showVisualComponents = false"
+          />
+        </div>
+      </div>
+    </div>
+
     <!-- Document Content -->
     <div class="flex-1 overflow-hidden">
       <div v-if="isLoading" class="flex items-center justify-center h-full">
@@ -117,8 +170,10 @@ import {
   ExclamationTriangleIcon,
   XMarkIcon,
   ChevronDownIcon,
-  DocumentIcon
+  DocumentIcon,
+  ChartBarIcon
 } from '@heroicons/vue/24/outline'
+import VisualComponents from './VisualComponents.vue'
 
 const props = defineProps({
   documentContent: {
@@ -128,6 +183,10 @@ const props = defineProps({
   sessionId: {
     type: String,
     default: ''
+  },
+  visualData: {
+    type: Object,
+    default: () => null
   }
 })
 
@@ -138,6 +197,7 @@ const error = ref('')
 const isGeneratingPDF = ref(false)
 const isGeneratingWord = ref(false)
 const showDownloadMenu = ref(false)
+const showVisualComponents = ref(false)
 const downloadDropdown = ref(null)
 const documentContent = ref(null)
 
@@ -240,7 +300,6 @@ const showNotification = (message, type = 'success') => {
   }, 3000)
 }
 
-
 const toggleDownloadMenu = () => {
   showDownloadMenu.value = !showDownloadMenu.value
 }
@@ -253,7 +312,6 @@ const copyToClipboard = async () => {
     showNotification('Kopyalama işlemi başarısız oldu', 'error')
   }
 }
-
 
 const generateHTMLTemplate = (content) => {
   return `<!DOCTYPE html>
@@ -503,6 +561,13 @@ watch(() => props.documentContent, (newContent) => {
   if (newContent) {
     isLoading.value = false
     error.value = ''
+  }
+}, { immediate: true })
+
+// Visual data değişikliklerini izle ve otomatik olarak göster
+watch(() => props.visualData, (newVisualData) => {
+  if (newVisualData) {
+    showVisualComponents.value = true
   }
 }, { immediate: true })
 

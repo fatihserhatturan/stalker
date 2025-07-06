@@ -1,0 +1,70 @@
+Merhaba! Şirketimiz için kapsamlı bir e-ticaret platformu geliştirmek istiyoruz.
+Proje Tanımı:
+Online satış yapmak için modern bir e-ticaret sitesi geliştireceğiz. Platform hem web hem de mobil uyumlu olacak. Müşteriler ürün katalogunu inceleyebilecek, sepete ekleyebilecek ve güvenli ödeme yapabilecek.
+Hedef Kitle:
+
+Birincil: 25-45 yaş arası online alışveriş yapan kullanıcılar
+İkincil: Mağaza sahipleri (admin paneli kullanacaklar)
+Yaklaşık 10.000 aktif kullanıcı bekliyoruz
+
+İşlevsel Gereksinimler:
+
+Ürün Yönetimi: Katalog, kategori, stok takibi
+Kullanıcı Hesapları: Kayıt, giriş, profil yönetimi
+Sepet ve Ödeme: Alışveriş sepeti, kredi kartı entegrasyonu
+Admin Paneli: Sipariş yönetimi, raporlama
+Arama ve Filtreleme: Gelişmiş ürün arama sistemi
+
+Teknik Gereksinimler:
+
+Frontend: Vue.js 3, Tailwind CSS
+Backend: Node.js, Express
+Veritabanı: PostgreSQL
+Ödeme: İyzico API entegrasyonu
+CDN: Ürün resimlerinin hızlı yüklenmesi için
+
+Ekip Yapısı:
+
+1 Proje Müdürü
+2 Frontend Developer (Vue.js)
+2 Backend Developer (Node.js)
+1 UI/UX Designer
+1 DevOps Engineer
+1 QA Test Engineer
+
+Zaman Planı:
+
+Analiz ve Tasarım: 3 hafta
+Frontend Geliştirme: 8 hafta
+Backend Geliştirme: 10 hafta
+Entegrasyon ve Test: 4 hafta
+Deployment ve Go-Live: 1 hafta
+Toplam: 26 hafta (6 ay)
+
+Bütçe Tahmini:
+
+Geliştirme Ekibi: 450.000 TL
+Altyapı ve Hosting: 50.000 TL
+Üçüncü Parti Lisanslar: 30.000 TL
+Test ve QA: 70.000 TL
+Toplam: 600.000 TL
+
+Riskler:
+
+Ödeme Entegrasyonu: İyzico API'sindeki değişiklikler (Olasılık: Orta, Etki: Yüksek)
+Performans Sorunları: Yüksek trafik altında yavaşlama (Olasılık: Yüksek, Etki: Orta)
+Güvenlik Açıkları: Kullanıcı verilerinin korunması (Olasılık: Düşük, Etki: Çok Yüksek)
+Mobil Uyumluluk: Farklı cihazlarda görüntüleme sorunları (Olasılık: Orta, Etki: Orta)
+Kaynak Eksikliği: Tecrübeli geliştiricilerin bulunamaması (Olasılık: Yüksek, Etki: Yüksek)
+
+Mevcut Durum:
+Şu anda Excel'de ürün kataloğumuz var ama online satış yapamıyoruz. Müşteriler telefon ile sipariş veriyor, bu da çok yavaş ve hatalı. Günlük ortalama 50 sipariş alıyoruz ama online platformla bunu 200'e çıkarmayı hedefliyoruz.
+Başarı Kriterleri:
+
+Günlük 200+ sipariş alabilmek
+Sayfa yüklenme süresi 3 saniyenin altında
+%99.5 uptime oranı
+Mobil kullanıcı deneyimi skoru 4.5/5
+Aylık %15 büyüme oranı
+
+Bu proje için detaylı analiz ve görsel raporlar hazırlayabilir misiniz?

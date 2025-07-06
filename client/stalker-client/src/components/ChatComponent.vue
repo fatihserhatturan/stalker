@@ -363,6 +363,9 @@ const documentContent = ref('')
 const sessionDocuments = ref([])
 const analysisStatus = ref(null)
 
+const isGeneratingVisualData = ref(false)
+const visualData = ref(null)
+
 const notification = ref({
   show: false,
   message: '',
@@ -663,38 +666,62 @@ const generateAnalysisDocument = async () => {
   if (isGeneratingDocument.value || !isConnected.value) return
 
   isGeneratingDocument.value = true
+  isGeneratingVisualData.value = true
 
   try {
-    const response = await fetch(`${API_BASE_URL}/generate-analysis-document`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        session_id: sessionId.value
+    // Paralel olarak doküman ve görsel veri üret
+    const [documentResponse, visualResponse] = await Promise.allSettled([
+      fetch(`${API_BASE_URL}/generate-analysis-document`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId.value
+        })
+      }),
+      fetch(`${API_BASE_URL}/generate-visual-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId.value,
+          message: "generate_visual_data"
+        })
       })
-    })
+    ])
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+    // Doküman sonucunu işle
+    if (documentResponse.status === 'fulfilled' && documentResponse.value.ok) {
+      const documentData = await documentResponse.value.json()
+      documentContent.value = documentData.document_content
+      showDocument.value = true
+      await loadSessionDocuments()
+      showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
+    } else {
+      const error = documentResponse.reason || 'Doküman oluşturulamadı'
+      showNotification(`Doküman oluşturulurken hata: ${error}`, 'error')
     }
 
-    const data = await response.json()
-
-    documentContent.value = data.document_content
-    showDocument.value = true
-
-    await loadSessionDocuments()
-
-    showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
+    // Görsel veri sonucunu işle
+    if (visualResponse.status === 'fulfilled' && visualResponse.value.ok) {
+      const visualResponseData = await visualResponse.value.json()
+      visualData.value = visualResponseData.visual_data
+      showNotification('Görsel veriler başarıyla oluşturuldu!', 'success')
+    } else {
+      console.error('Visual data generation failed:', visualResponse.reason)
+      visualData.value = null
+    }
 
   } catch (error) {
-    console.error("Document generation error:", error)
-    showNotification(`Doküman oluşturulurken hata: ${error.message}`, 'error')
+    console.error("Document/Visual generation error:", error)
+    showNotification(`İşlem sırasında hata: ${error.message}`, 'error')
   } finally {
     isGeneratingDocument.value = false
+    isGeneratingVisualData.value = false
   }
 }
 
