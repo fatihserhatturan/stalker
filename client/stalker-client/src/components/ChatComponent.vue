@@ -23,6 +23,22 @@
 
             <!-- İlerleme ve Template Kontrolleri -->
             <div class="flex items-center space-x-3">
+              <!-- Görüntü Üretimi Toggle Butonu -->
+              <button
+                @click="isImageGenerationEnabled = !isImageGenerationEnabled"
+                :disabled="isLoading || !isConnected"
+                :class="[
+                  'flex items-center space-x-1 px-3 py-2 border rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed',
+                  isImageGenerationEnabled
+                    ? 'bg-purple-600 border-purple-500 text-white'
+                    : 'bg-gray-700 border-gray-600 hover:border-purple-400 text-white'
+                ]"
+                title="Görüntü Üretimi Aktif/Pasif"
+              >
+                <ChartBarIcon class="w-4 h-4" />
+                <span>{{ isImageGenerationEnabled ? 'Görüntü Aktif' : 'Görüntü Pasif' }}</span>
+              </button>
+
               <!-- Template Yükleme Butonu -->
               <button
                 @click="showTemplateUpload = !showTemplateUpload"
@@ -273,6 +289,7 @@
                 ? `Template "${templateFile.name}" kullanılarak doküman oluşturulacak`
                 : 'Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak'
               }}
+              {{ isImageGenerationEnabled ? ' (Görsel analiz dahil)' : ' (Sadece metin dokümanı)' }}
             </p>
           </div>
         </div>
@@ -390,6 +407,7 @@
       <DocumentViewer
         :document-content="documentContent"
         :session-id="sessionId"
+        :visual-data="isImageGenerationEnabled ? visualData : null"
         @close-document="closeDocument"
       />
     </div>
@@ -419,6 +437,7 @@ import {
   PaperClipIcon,
   ArrowUpTrayIcon,
   XMarkIcon,
+  ChartBarIcon,
 } from '@heroicons/vue/24/outline'
 import DocumentViewer from './DocumentViewer.vue'
 
@@ -458,6 +477,7 @@ const analysisStatus = ref(null)
 
 const isGeneratingVisualData = ref(false)
 const visualData = ref(null)
+const isImageGenerationEnabled = ref(false) // Görüntü üretimi toggle durumu
 
 const notification = ref({
   show: false,
@@ -808,7 +828,11 @@ const generateAnalysisDocument = async () => {
   if (isGeneratingDocument.value || !isConnected.value) return
 
   isGeneratingDocument.value = true
-  isGeneratingVisualData.value = true
+
+  // Sadece görüntü üretimi aktifse görsel veri üret
+  if (isImageGenerationEnabled.value) {
+    isGeneratingVisualData.value = true
+  }
 
   try {
     // Template dosyasını backend'e gönder (eğer varsa)
@@ -833,17 +857,21 @@ const generateAnalysisDocument = async () => {
       }
     }
 
-    // Paralel olarak doküman ve görsel veri üret
-    const [documentResponse, visualResponse] = await Promise.allSettled([
-      fetch(`${API_BASE_URL}/generate-analysis-document`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      }),
-      fetch(`${API_BASE_URL}/generate-visual-data`, {
+    // Doküman üretimi her zaman yap
+    const documentPromise = fetch(`${API_BASE_URL}/generate-analysis-document`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    // Görsel veri sadece aktifse üret
+    const promises = [documentPromise]
+
+    if (isImageGenerationEnabled.value) {
+      const visualPromise = fetch(`${API_BASE_URL}/generate-visual-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -854,11 +882,14 @@ const generateAnalysisDocument = async () => {
           message: "generate_visual_data"
         })
       })
-    ])
+      promises.push(visualPromise)
+    }
+
+    const results = await Promise.allSettled(promises)
 
     // Doküman sonucunu işle
-    if (documentResponse.status === 'fulfilled' && documentResponse.value.ok) {
-      const documentData = await documentResponse.value.json()
+    if (results[0].status === 'fulfilled' && results[0].value.ok) {
+      const documentData = await results[0].value.json()
       documentContent.value = documentData.document_content
       showDocument.value = true
       await loadSessionDocuments()
@@ -869,17 +900,22 @@ const generateAnalysisDocument = async () => {
         'success'
       )
     } else {
-      const error = documentResponse.reason || 'Doküman oluşturulamadı'
+      const error = results[0].reason || 'Doküman oluşturulamadı'
       showNotification(`Doküman oluşturulurken hata: ${error}`, 'error')
     }
 
-    // Görsel veri sonucunu işle
-    if (visualResponse.status === 'fulfilled' && visualResponse.value.ok) {
-      const visualResponseData = await visualResponse.value.json()
-      visualData.value = visualResponseData.visual_data
-      showNotification('Görsel veriler başarıyla oluşturuldu!', 'success')
-    } else {
-      console.error('Visual data generation failed:', visualResponse.reason)
+    // Görsel veri sonucunu işle (sadece aktifse)
+    if (isImageGenerationEnabled.value && results[1]) {
+      if (results[1].status === 'fulfilled' && results[1].value.ok) {
+        const visualResponseData = await results[1].value.json()
+        visualData.value = visualResponseData.visual_data
+        showNotification('Görsel veriler başarıyla oluşturuldu!', 'success')
+      } else {
+        console.error('Visual data generation failed:', results[1].reason)
+        visualData.value = null
+      }
+    } else if (!isImageGenerationEnabled.value) {
+      // Görüntü üretimi kapalıysa visualData'yı temizle
       visualData.value = null
     }
 

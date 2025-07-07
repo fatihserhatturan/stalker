@@ -67,7 +67,7 @@
     </div>
 
     <!-- Görsel Öğeler Tıklanabilir Alan -->
-    <div class="border-b border-gray-700/50">
+    <div v-if="visualData" class="border-b border-gray-700/50">
       <button
         @click="showVisualComponents = !showVisualComponents"
         class="w-full px-6 py-4 bg-gray-800/40 hover:bg-gray-800/60 border-b border-gray-700/30 transition-all duration-300 group"
