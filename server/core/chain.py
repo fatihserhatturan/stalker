@@ -30,7 +30,7 @@ def get_memory_for_session(session_id: str) -> ConversationSummaryBufferMemory:
 
         chat_histories[session_id] = ConversationSummaryBufferMemory(
             llm=ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 temperature=0.1,
                 google_api_key=os.getenv("GOOGLE_API_KEY"),
                 convert_system_message_to_human=True
@@ -146,7 +146,7 @@ async def process_uploaded_file(session_id: str, file_content: bytes, filename: 
             raise ValueError("GOOGLE_API_KEY environment variable is not set!")
 
         model = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             temperature=0.3,
             google_api_key=google_api_key,
             convert_system_message_to_human=True
@@ -291,7 +291,7 @@ def get_conversational_chain():
 
     try:
         model = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             temperature=0.7,
             google_api_key=google_api_key,
             convert_system_message_to_human=True
@@ -350,7 +350,7 @@ async def generate_detailed_analysis_document(session_id: str):
         memory = get_memory_for_session(session_id)
 
         model = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             temperature=0.3,
             google_api_key=google_api_key,
             convert_system_message_to_human=True
@@ -414,7 +414,7 @@ async def generate_visual_data_from_session(session_id: str):
         memory = get_memory_for_session(session_id)
 
         model = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             temperature=0.1,
             google_api_key=google_api_key,
             convert_system_message_to_human=True
@@ -697,3 +697,124 @@ def get_analysis_status(session_id: str) -> dict:
         "has_uploaded_files": context.get("has_uploaded_files", False),
         "uploaded_files_count": len(uploaded_files.get(session_id, []))
     }
+
+async def generate_detailed_analysis_document(session_id: str, use_template: bool = False):
+    """Session geçmişine dayalı detaylı analiz dokümanı oluşturur ve session'a kaydeder."""
+
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        raise ValueError("GOOGLE_API_KEY environment variable is not set!")
+
+    try:
+        memory = get_memory_for_session(session_id)
+
+        model = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0.3,
+            google_api_key=google_api_key,
+            convert_system_message_to_human=True
+        )
+
+        conversation_history = ""
+        for message in memory.chat_memory.messages:
+            if hasattr(message, 'content'):
+                role = "Kullanıcı" if message.type == "human" else "AI"
+                conversation_history += f"{role}: {message.content}\n\n"
+
+        # Template kontrolü
+        template_content = ""
+        template_used = False
+
+        if use_template and session_id in uploaded_files:
+            for file_info in uploaded_files[session_id]:
+                if file_info.get("is_template", False):
+                    template_content = file_info['content']
+                    template_used = True
+                    logger.info(f"Template found and will be used: {file_info['filename']}")
+                    break
+
+        # Yüklenen proje dosyalarını ekle (template hariç)
+        uploaded_files_content = ""
+        if session_id in uploaded_files and uploaded_files[session_id]:
+            uploaded_files_content = "\n**Yüklenen Dosyalar:**\n"
+            for file_info in uploaded_files[session_id]:
+                if not file_info.get("is_template", False):  # Template dosyasını hariç tut
+                    uploaded_files_content += f"\n**Dosya: {file_info['filename']}**\n"
+                    uploaded_files_content += f"İçerik: {file_info['content'][:2000]}...\n"
+
+        # Template kullanılacaksa özel prompt, yoksa default prompt
+        if template_used and template_content:
+            detailed_prompt = f"""
+Template formatını kullanarak analiz dokümanı hazırla.
+
+TEMPLATE:
+{template_content[:2000]}
+
+KONUŞMA:
+{conversation_history[:1000]}
+
+Talimatlar:
+- Template formatını koru
+- Boş alanları konuşmadaki bilgilerle doldur
+- Eksik bilgiler için [BİLGİ GEREKLİ] yaz
+"""
+            document_title = f"Template Bazlı Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        else:
+            # Default prompt kullan - kısaltılmış versiyon
+            detailed_prompt = f"""
+Konuşma geçmişine dayalı analiz dokümanı hazırla.
+
+KONUŞMA:
+{conversation_history[:1500]}
+
+{uploaded_files_content[:500] if uploaded_files_content else ""}
+
+Kapsamlı bir Ön Analiz Dokümanı hazırla. Eksik bilgiler için [BİLGİ GEREKLİ] kullan.
+"""
+            document_title = f"Proje Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("human", detailed_prompt)
+        ])
+
+        chain = prompt | model | StrOutputParser()
+        result = await chain.ainvoke({})
+
+        saved_document = save_document_to_session(session_id, result, document_title)
+
+        logger.info(f"Detailed analysis document generated and saved for session: {session_id} (Template used: {template_used})")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error generating detailed analysis: {str(e)}")
+        raise e
+
+async def process_template_upload(session_id: str, file_content: bytes, filename: str, file_extension: str):
+    """Template dosyasını işler ve session'a kaydeder."""
+    try:
+        # Dosyadan metin çıkar
+        template_content = extract_text_from_file(file_content, filename, file_extension)
+
+        # Template bilgilerini session'a kaydet
+        if session_id not in uploaded_files:
+            uploaded_files[session_id] = []
+
+        # Template olarak işaretle
+        template_info = {
+            "filename": filename,
+            "content": template_content,
+            "uploaded_at": datetime.now().isoformat(),
+            "file_type": file_extension,
+            "is_template": True
+        }
+
+        # Mevcut template'i kaldır ve yenisini ekle
+        uploaded_files[session_id] = [f for f in uploaded_files[session_id] if not f.get("is_template", False)]
+        uploaded_files[session_id].append(template_info)
+
+        logger.info(f"Template processed and saved for session: {session_id}")
+        return {"success": True, "filename": filename}
+
+    except Exception as e:
+        logger.error(f"Error processing template: {str(e)}")
+        raise e

@@ -9,7 +9,9 @@ from core.chain import (
     get_analysis_status,
     get_session_documents,
     get_document_by_id,
-    process_uploaded_file
+    process_uploaded_file,
+    extract_text_from_file,
+    uploaded_files
 )
 import logging
 
@@ -191,7 +193,7 @@ async def get_document(session_id: str, document_id: str):
 async def generate_analysis_document(request: DocumentRequest):
     """
     Session konuşma geçmişine dayalı gerçek analiz dokümanı oluşturan endpoint.
-    Kullanıcı ile yapılan konuşmalardan toplanan bilgileri kullanır.
+    Template yüklenmişse template kullanır, yoksa default format kullanır.
     """
     try:
         logger.info(f"Analysis document generation request received for session: {request.session_id}")
@@ -204,9 +206,12 @@ async def generate_analysis_document(request: DocumentRequest):
                 detail="Session bulunamadı veya konuşma geçmişi yok"
             )
 
-        document_content = await generate_detailed_analysis_document(request.session_id)
+        # Template kullanım kontrolü
+        use_template = getattr(request, 'use_template', False)
 
-        logger.info(f"Analysis document generated successfully for session: {request.session_id}")
+        document_content = await generate_detailed_analysis_document(request.session_id, use_template)
+
+        logger.info(f"Analysis document generated successfully for session: {request.session_id} (Template: {use_template})")
 
         return DocumentResponse(
             document_content=document_content,
@@ -222,6 +227,7 @@ async def generate_analysis_document(request: DocumentRequest):
             status_code=500,
             detail=f"Analiz dokümanı oluşturulurken bir hata oluştu: {str(e)}"
         )
+
 
 @app.post("/generate-visual-data")
 async def generate_visual_data(request: ChatRequest):
@@ -268,6 +274,55 @@ async def generate_visual_data(request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Görsel veri üretilirken hata oluştu: {str(e)}"
+        )
+
+@app.post("/upload-template")
+async def upload_template(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+    is_template: str = Form("true")
+):
+    """
+    Template dosyalarını yüklemek için endpoint.
+    """
+    try:
+        logger.info(f"Template upload request for session: {session_id}, file: {file.filename}")
+
+        # Dosya boyutu kontrolü (5MB limit template için)
+        file_content = await file.read()
+        if len(file_content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Template dosyası 5MB'dan büyük olamaz")
+
+        # Template dosya tipini kontrol et
+        allowed_extensions = ['.txt', '.md', '.docx', '.doc']
+        file_extension = '.' + file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Desteklenmeyen template formatı. İzin verilen formatlar: {', '.join(allowed_extensions)}"
+            )
+
+        # Template işleme işini chain.py'ye devret
+        from core.chain import process_template_upload
+        result = await process_template_upload(session_id, file_content, file.filename, file_extension)
+
+        logger.info(f"Template processed successfully for session: {session_id}")
+
+        return {
+            "message": "Template başarıyla yüklendi",
+            "session_id": session_id,
+            "filename": file.filename,
+            "template_loaded": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in template upload endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Template yüklenirken bir hata oluştu: {str(e)}"
         )
 
 

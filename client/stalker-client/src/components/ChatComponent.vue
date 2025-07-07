@@ -21,14 +21,95 @@
               </div>
             </div>
 
-            <!-- İlerleme ve Doküman Kontrolleri -->
+            <!-- İlerleme ve Template Kontrolleri -->
             <div class="flex items-center space-x-3">
+              <!-- Template Yükleme Butonu -->
+              <button
+                @click="showTemplateUpload = !showTemplateUpload"
+                :disabled="isLoading || !isConnected"
+                class="flex items-center space-x-1 px-3 py-2 bg-gray-700 border border-gray-600 hover:border-orange-400 text-white rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Doküman Template Yükle"
+              >
+                <DocumentIcon class="w-4 h-4" />
+                <span>Template</span>
+                <div v-if="templateFile" class="w-2 h-2 bg-orange-400 rounded-full"></div>
+              </button>
+
               <!-- İlerleme Göstergesi -->
               <div v-if="analysisStatus && messages.length > 1" class="flex items-center space-x-2 px-3 py-1 bg-gray-800/60 rounded-lg border border-gray-700/30">
                 <div class="w-2 h-2 rounded-full" :class="getStatusColor()"></div>
                 <span class="text-xs text-gray-300">{{ Math.round(analysisStatus.completion_rate) }}%</span>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      <!-- Template Yükleme Alanı -->
+      <div v-if="showTemplateUpload" class="border-b border-gray-700/50 bg-gray-800/40">
+        <div class="max-w-4xl mx-auto px-6 py-4">
+          <div class="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-white flex items-center space-x-2">
+                <DocumentIcon class="w-4 h-4 text-orange-400" />
+                <span>Doküman Template Yükle</span>
+              </h3>
+              <button
+                @click="showTemplateUpload = false"
+                class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
+              >
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+
+            <div v-if="!templateFile" class="space-y-3">
+              <div
+                @drop="handleTemplateDrop"
+                @dragover.prevent
+                @dragenter.prevent
+                class="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-orange-500 transition-all duration-200 cursor-pointer"
+                :class="{ 'border-orange-500 bg-orange-500/10': isTemplateDropping }"
+              >
+                <input
+                  ref="templateInput"
+                  type="file"
+                  accept=".txt,.md,.docx,.doc"
+                  @change="handleTemplateSelect"
+                  class="hidden"
+                />
+
+                <div class="space-y-2">
+                  <DocumentIcon class="w-6 h-6 text-gray-400 mx-auto" />
+                  <p class="text-sm text-gray-300">
+                    <button
+                      @click="$refs.templateInput?.click()"
+                      class="text-orange-400 hover:text-orange-300 hover:border-b hover:border-orange-300 transition-all duration-200"
+                    >
+                      Template dosyası seç
+                    </button>
+                    veya buraya sürükle
+                  </p>
+                  <p class="text-xs text-gray-500">
+                    Desteklenen formatlar: Word, Markdown, Text
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="space-y-3">
+              <div class="flex items-center space-x-2 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <DocumentIcon class="w-5 h-5 text-orange-400" />
+                <span class="text-sm text-orange-300 flex-1">{{ templateFile.name }}</span>
+                <button
+                  @click="removeTemplate"
+                  class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
+                >
+                  <XMarkIcon class="w-4 h-4" />
+                </button>
+              </div>
+              <p class="text-xs text-gray-400">
+                ✓ Template yüklendi. Doküman oluşturulurken bu template kullanılacak.
+              </p>
             </div>
           </div>
         </div>
@@ -140,7 +221,9 @@
               <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
                 <div class="flex items-center space-x-2">
                   <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
-                  <span class="text-xs text-gray-400 ml-2">Analiz dokümanı oluşturuluyor...</span>
+                  <span class="text-xs text-gray-400 ml-2">
+                    {{ templateFile ? 'Template ile doküman oluşturuluyor...' : 'Analiz dokümanı oluşturuluyor...' }}
+                  </span>
                 </div>
                 <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
               </div>
@@ -186,7 +269,10 @@
           </div>
           <div class="text-center">
             <p class="text-xs text-gray-400">
-              Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak
+              {{ templateFile
+                ? `Template "${templateFile.name}" kullanılarak doküman oluşturulacak`
+                : 'Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak'
+              }}
             </p>
           </div>
         </div>
@@ -329,6 +415,7 @@ import {
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
   DocumentTextIcon,
+  DocumentIcon,
   PaperClipIcon,
   ArrowUpTrayIcon,
   XMarkIcon,
@@ -356,6 +443,12 @@ const showFileUpload = ref(false)
 const selectedFile = ref(null)
 const isDragging = ref(false)
 const fileInput = ref(null)
+
+// Template upload state
+const showTemplateUpload = ref(false)
+const templateFile = ref(null)
+const isTemplateDropping = ref(false)
+const templateInput = ref(null)
 
 // Document viewer state
 const showDocument = ref(false)
@@ -427,6 +520,55 @@ const formatDocumentDate = (dateString) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// Template handling functions
+const handleTemplateSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    validateAndSetTemplate(file)
+  }
+}
+
+const handleTemplateDrop = (event) => {
+  event.preventDefault()
+  isTemplateDropping.value = false
+
+  const files = event.dataTransfer.files
+  if (files.length > 0) {
+    validateAndSetTemplate(files[0])
+  }
+}
+
+const validateAndSetTemplate = (file) => {
+  const allowedTypes = [
+    'text/plain',
+    'text/markdown',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword'
+  ]
+
+  const allowedExtensions = ['.txt', '.md', '.docx', '.doc']
+  const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+
+  if (file.size > 5 * 1024 * 1024) {
+    showNotification('Template dosyası 5MB\'dan büyük olamaz', 'error')
+    return
+  }
+
+  if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+    showNotification('Desteklenmeyen template formatı. İzin verilen formatlar: Word, Markdown, Text', 'error')
+    return
+  }
+
+  templateFile.value = file
+  showNotification('Template başarıyla yüklendi!', 'success')
+  showTemplateUpload.value = false
+}
+
+const removeTemplate = () => {
+  templateFile.value = null
+  showNotification('Template kaldırıldı', 'success')
 }
 
 const checkConnection = async () => {
@@ -669,6 +811,28 @@ const generateAnalysisDocument = async () => {
   isGeneratingVisualData.value = true
 
   try {
+    // Template dosyasını backend'e gönder (eğer varsa)
+    let requestBody = {
+      session_id: sessionId.value
+    }
+
+    // Eğer template var ise, önce template'i yükle
+    if (templateFile.value) {
+      const templateFormData = new FormData()
+      templateFormData.append('file', templateFile.value)
+      templateFormData.append('session_id', sessionId.value)
+      templateFormData.append('is_template', 'true')
+
+      const templateResponse = await fetch(`${API_BASE_URL}/upload-template`, {
+        method: 'POST',
+        body: templateFormData
+      })
+
+      if (templateResponse.ok) {
+        requestBody.use_template = true
+      }
+    }
+
     // Paralel olarak doküman ve görsel veri üret
     const [documentResponse, visualResponse] = await Promise.allSettled([
       fetch(`${API_BASE_URL}/generate-analysis-document`, {
@@ -677,9 +841,7 @@ const generateAnalysisDocument = async () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          session_id: sessionId.value
-        })
+        body: JSON.stringify(requestBody)
       }),
       fetch(`${API_BASE_URL}/generate-visual-data`, {
         method: 'POST',
@@ -700,7 +862,12 @@ const generateAnalysisDocument = async () => {
       documentContent.value = documentData.document_content
       showDocument.value = true
       await loadSessionDocuments()
-      showNotification('Analiz dokümanı başarıyla oluşturuldu!', 'success')
+      showNotification(
+        templateFile.value
+          ? 'Template ile analiz dokümanı başarıyla oluşturuldu!'
+          : 'Analiz dokümanı başarıyla oluşturuldu!',
+        'success'
+      )
     } else {
       const error = documentResponse.reason || 'Doküman oluşturulamadı'
       showNotification(`Doküman oluşturulurken hata: ${error}`, 'error')
