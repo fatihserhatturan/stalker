@@ -52,9 +52,9 @@
               </button>
 
               <!-- İlerleme Göstergesi -->
-              <div v-if="analysisStatus && messages.length > 1" class="flex items-center space-x-2 px-3 py-1 bg-gray-800/60 rounded-lg border border-gray-700/30">
+              <div v-if="messages.length > 1" class="flex items-center space-x-2 px-3 py-2 bg-gray-800/60 rounded-lg border border-gray-700/30">
                 <div class="w-2 h-2 rounded-full" :class="getStatusColor()"></div>
-                <span class="text-xs text-gray-300">{{ Math.round(analysisStatus.completion_rate) }}%</span>
+                <span class="text-xs text-gray-300">{{ getCompletionRate() }}%</span>
               </div>
             </div>
           </div>
@@ -627,6 +627,13 @@ const getStatusColor = () => {
   if (rate < 30) return 'bg-red-400'
   if (rate < 70) return 'bg-yellow-400'
   return 'bg-green-400'
+}
+
+const getCompletionRate = () => {
+  if (!analysisStatus.value || isNaN(analysisStatus.value.completion_rate)) {
+    return 0
+  }
+  return Math.round(analysisStatus.value.completion_rate)
 }
 
 const loadSessionDocuments = async () => {
