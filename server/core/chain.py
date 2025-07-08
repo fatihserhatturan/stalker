@@ -339,7 +339,7 @@ async def process_conversation(session_id: str, user_message: str):
         logger.error(f"Error processing conversation: {str(e)}")
         raise e
 
-async def generate_detailed_analysis_document(session_id: str):
+async def generate_detailed_analysis_document(session_id: str, use_template: bool = False):
     """Session geçmişine dayalı detaylı analiz dokümanı oluşturur ve session'a kaydeder."""
 
     google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -362,15 +362,44 @@ async def generate_detailed_analysis_document(session_id: str):
                 role = "Kullanıcı" if message.type == "human" else "AI"
                 conversation_history += f"{role}: {message.content}\n\n"
 
-        # Yüklenen dosya bilgilerini ekle
+        # Template kontrolü
+        template_content = ""
+        template_used = False
+
+        if use_template and session_id in uploaded_files:
+            for file_info in uploaded_files[session_id]:
+                if file_info.get("is_template", False):
+                    template_content = file_info['content']
+                    template_used = True
+                    logger.info(f"Template found and will be used: {file_info['filename']}")
+                    break
+
+        # Yüklenen proje dosyalarını ekle (template hariç)
         uploaded_files_content = ""
         if session_id in uploaded_files and uploaded_files[session_id]:
             uploaded_files_content = "\n**Yüklenen Dosyalar:**\n"
             for file_info in uploaded_files[session_id]:
-                uploaded_files_content += f"\n**Dosya: {file_info['filename']}**\n"
-                uploaded_files_content += f"İçerik: {file_info['content'][:2000]}...\n"
+                if not file_info.get("is_template", False):  # Template dosyasını hariç tut
+                    uploaded_files_content += f"\n**Dosya: {file_info['filename']}**\n"
+                    uploaded_files_content += f"İçerik: {file_info['content'][:2000]}...\n"
 
-        detailed_prompt = f"""
+        # Template kullanılacaksa özel prompt, yoksa prompts.py'daki template
+        if template_used and template_content:
+            detailed_prompt = f"""
+SADECE template formatını kullanarak analiz dokümanı üret. Hiçbir ek açıklama veya giriş cümlesi ekleme.
+
+TEMPLATE:
+{template_content[:2000]}
+
+KONUŞMA:
+{conversation_history[:1000]}
+
+Template formatını koru, boş alanları konuşmadaki bilgilerle doldur. SADECE doküman içeriğini çıktı olarak ver.
+"""
+            document_title = f"Template Bazlı Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        else:
+            # prompts.py'daki DETAILED_ANALYSIS_PROMPT template'ini kullan
+            detailed_prompt = f"""
 {DETAILED_ANALYSIS_PROMPT}
 
 **Konuşma Geçmişi:**
@@ -380,7 +409,9 @@ async def generate_detailed_analysis_document(session_id: str):
 
 Yukarıdaki konuşma geçmişini ve yüklenen dosyaları analiz ederek topladığın bilgiler ile kapsamlı bir Ön Analiz Dokümanı hazırla.
 Eksik bilgiler için [BİLGİ GEREKLİ] notasyonunu kullan.
+SADECE doküman markdown içeriğini çıktı olarak ver, hiçbir ek açıklama ekleme.
 """
+            document_title = f"Proje Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
 
         prompt = ChatPromptTemplate.from_messages([
             ("human", detailed_prompt)
@@ -389,10 +420,26 @@ Eksik bilgiler için [BİLGİ GEREKLİ] notasyonunu kullan.
         chain = prompt | model | StrOutputParser()
         result = await chain.ainvoke({})
 
-        document_title = f"Proje Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        # Sonuçtan sadece markdown dokümanı kısmını al
+        # Eğer model ekstra metin eklediyse temizle
+        lines = result.split('\n')
+        document_start = -1
+
+        # Doküman başlığını bul
+        for i, line in enumerate(lines):
+            if 'ÖN ANALİZ DOKÜMANI' in line or line.strip().startswith('# ') or template_used:
+                document_start = i
+                break
+
+        if document_start >= 0:
+            result = '\n'.join(lines[document_start:])
+
+        # Başında ve sonunda gereksiz metinleri temizle
+        result = result.strip()
+
         saved_document = save_document_to_session(session_id, result, document_title)
 
-        logger.info(f"Detailed analysis document generated and saved for session: {session_id}")
+        logger.info(f"Detailed analysis document generated and saved for session: {session_id} (Template used: {template_used})")
         return result
 
     except Exception as e:
@@ -698,97 +745,6 @@ def get_analysis_status(session_id: str) -> dict:
         "uploaded_files_count": len(uploaded_files.get(session_id, []))
     }
 
-async def generate_detailed_analysis_document(session_id: str, use_template: bool = False):
-    """Session geçmişine dayalı detaylı analiz dokümanı oluşturur ve session'a kaydeder."""
-
-    google_api_key = os.getenv("GOOGLE_API_KEY")
-    if not google_api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable is not set!")
-
-    try:
-        memory = get_memory_for_session(session_id)
-
-        model = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.3,
-            google_api_key=google_api_key,
-            convert_system_message_to_human=True
-        )
-
-        conversation_history = ""
-        for message in memory.chat_memory.messages:
-            if hasattr(message, 'content'):
-                role = "Kullanıcı" if message.type == "human" else "AI"
-                conversation_history += f"{role}: {message.content}\n\n"
-
-        # Template kontrolü
-        template_content = ""
-        template_used = False
-
-        if use_template and session_id in uploaded_files:
-            for file_info in uploaded_files[session_id]:
-                if file_info.get("is_template", False):
-                    template_content = file_info['content']
-                    template_used = True
-                    logger.info(f"Template found and will be used: {file_info['filename']}")
-                    break
-
-        # Yüklenen proje dosyalarını ekle (template hariç)
-        uploaded_files_content = ""
-        if session_id in uploaded_files and uploaded_files[session_id]:
-            uploaded_files_content = "\n**Yüklenen Dosyalar:**\n"
-            for file_info in uploaded_files[session_id]:
-                if not file_info.get("is_template", False):  # Template dosyasını hariç tut
-                    uploaded_files_content += f"\n**Dosya: {file_info['filename']}**\n"
-                    uploaded_files_content += f"İçerik: {file_info['content'][:2000]}...\n"
-
-        # Template kullanılacaksa özel prompt, yoksa default prompt
-        if template_used and template_content:
-            detailed_prompt = f"""
-Template formatını kullanarak analiz dokümanı hazırla.
-
-TEMPLATE:
-{template_content[:2000]}
-
-KONUŞMA:
-{conversation_history[:1000]}
-
-Talimatlar:
-- Template formatını koru
-- Boş alanları konuşmadaki bilgilerle doldur
-- Eksik bilgiler için [BİLGİ GEREKLİ] yaz
-"""
-            document_title = f"Template Bazlı Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-        else:
-            # Default prompt kullan - kısaltılmış versiyon
-            detailed_prompt = f"""
-Konuşma geçmişine dayalı analiz dokümanı hazırla.
-
-KONUŞMA:
-{conversation_history[:1500]}
-
-{uploaded_files_content[:500] if uploaded_files_content else ""}
-
-Kapsamlı bir Ön Analiz Dokümanı hazırla. Eksik bilgiler için [BİLGİ GEREKLİ] kullan.
-"""
-            document_title = f"Proje Analiz Dokümanı - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("human", detailed_prompt)
-        ])
-
-        chain = prompt | model | StrOutputParser()
-        result = await chain.ainvoke({})
-
-        saved_document = save_document_to_session(session_id, result, document_title)
-
-        logger.info(f"Detailed analysis document generated and saved for session: {session_id} (Template used: {template_used})")
-        return result
-
-    except Exception as e:
-        logger.error(f"Error generating detailed analysis: {str(e)}")
-        raise e
-
 async def process_template_upload(session_id: str, file_content: bytes, filename: str, file_extension: str):
     """Template dosyasını işler ve session'a kaydeder."""
     try:
@@ -818,3 +774,4 @@ async def process_template_upload(session_id: str, file_content: bytes, filename
     except Exception as e:
         logger.error(f"Error processing template: {str(e)}")
         raise e
+

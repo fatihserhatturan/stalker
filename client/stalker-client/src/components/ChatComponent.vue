@@ -12,12 +12,11 @@
         <div class="max-w-4xl mx-auto px-6 py-4 h-[80px]">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <div class="p-2 bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl shadow-lg">
-                <CpuChipIcon class="w-6 h-6 text-white" />
+              <div class="w-10 h-10 rounded-xl shadow-lg overflow-hidden bg-white/10 backdrop-blur-sm">
+                <img src="@/assets/logo.png" alt="AI Logo" class="w-full h-full object-contain p-1" />
               </div>
               <div>
                 <h1 class="text-xl font-semibold text-white">AI Business Analyst</h1>
-                <p class="text-sm text-gray-300">Proje analiz asistanınız</p>
               </div>
             </div>
 
@@ -147,14 +146,14 @@
                 <div class="flex-shrink-0">
                   <div
                     :class="[
-                      'w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200',
+                      'w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 overflow-hidden',
                       msg.author === 'ai'
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-700 text-white'
+                        ? 'bg-white/10 backdrop-blur-sm'
                         : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white'
                     ]"
                   >
                     <UserIcon v-if="msg.author === 'user'" class="w-5 h-5" />
-                    <CpuChipIcon v-else class="w-5 h-5" />
+                    <img v-else src="@/assets/logo.png" alt="AI Logo" class="w-full h-full object-contain p-1" />
                   </div>
                 </div>
 
@@ -180,39 +179,68 @@
                 </div>
               </div>
 
-              <!-- Dokümanları göster -->
-              <div v-if="sessionDocuments.length > 0" class="space-y-3">
-                <div class="text-center">
-                  <div class="inline-flex items-center px-3 py-1 bg-emerald-600/20 text-emerald-400 rounded-full text-xs">
-                    <DocumentTextIcon class="w-3 h-3 mr-1" />
-                    Oluşturulan Dokümanlar
+              <!-- AI Önerileri -->
+              <div v-if="suggestions.length > 0 && !isLoading" class="flex flex-col items-end space-y-2">
+                <button
+                  v-for="(suggestion, index) in suggestions"
+                  :key="index"
+                  @click="selectSuggestion(suggestion)"
+                  class="max-w-2xl text-left p-3 bg-gradient-to-r from-blue-600/20 to-purple-700/20 border border-blue-500/30 rounded-xl hover:border-blue-400 transition-all duration-200 group suggestion-item"
+                  :style="{ animationDelay: `${index * 100}ms` }"
+                >
+                  <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0 mt-1">
+                      <div class="w-6 h-6 rounded-full bg-blue-600/30 flex items-center justify-center group-hover:bg-blue-600/50 transition-colors">
+                        <LightBulbIcon class="w-3 h-3 text-blue-300" />
+                      </div>
+                    </div>
+                    <p class="text-sm text-blue-100 group-hover:text-white transition-colors">{{ suggestion }}</p>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Dokümanları AI mesajı gibi göster -->
+              <div
+                v-for="doc in sessionDocuments"
+                :key="doc.id"
+                class="flex items-start space-x-4"
+              >
+                <div class="flex-shrink-0">
+                  <div class="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg">
+                    <DocumentTextIcon class="w-5 h-5 text-white" />
                   </div>
                 </div>
 
-                <div
-                  v-for="doc in sessionDocuments"
-                  :key="doc.id"
-                  @click="openDocument(doc)"
-                  class="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 cursor-pointer hover:border-emerald-500 transition-all duration-200"
-                >
-                  <div class="flex items-start space-x-3">
-                    <div class="p-2 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-lg shadow-lg">
-                      <DocumentTextIcon class="w-4 h-4 text-white" />
+                <div class="relative max-w-2xl rounded-2xl px-4 py-3 bg-gray-800 border border-gray-700/50 text-gray-100 shadow-lg transition-all duration-200 hover:border-emerald-400">
+                  <div class="space-y-2">
+                    <div class="flex items-center space-x-2">
+                      <DocumentTextIcon class="w-4 h-4 text-emerald-400" />
+                      <span class="text-sm font-medium text-emerald-400">Analiz Dokümanı Oluşturuldu</span>
                     </div>
-                    <div class="flex-1 min-w-0">
-                      <h4 class="text-sm font-medium text-white truncate">{{ doc.title }}</h4>
-                      <p class="text-xs text-gray-400 mt-1">{{ formatDocumentDate(doc.created_at) }}</p>
-                      <p class="text-xs text-emerald-400 mt-1">Görüntülemek için tıklayın</p>
+
+                    <div class="bg-gray-700/30 rounded-lg p-3 border border-gray-600/30">
+                      <h4 class="text-sm font-medium text-white mb-1">{{ doc.title }}</h4>
+                      <p class="text-xs text-gray-300 mb-2">{{ formatDocumentDate(doc.created_at) }}</p>
+
+                      <button
+                        @click="openDocument(doc)"
+                        class="inline-flex items-center space-x-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs transition-colors"
+                      >
+                        <DocumentTextIcon class="w-3 h-3" />
+                        <span>Dokümanı Görüntüle</span>
+                      </button>
                     </div>
                   </div>
+
+                  <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
                 </div>
               </div>
             </div>
 
             <div v-if="isLoading" class="flex items-start space-x-4">
               <div class="flex-shrink-0">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center shadow-lg">
-                  <CpuChipIcon class="w-5 h-5 text-white" />
+                <div class="w-10 h-10 rounded-full shadow-lg overflow-hidden bg-white/10 backdrop-blur-sm">
+                  <img src="@/assets/logo.png" alt="AI Logo" class="w-full h-full object-contain p-1" />
                 </div>
               </div>
               <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
@@ -428,7 +456,6 @@
 <script setup>
 import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import {
-  CpuChipIcon,
   UserIcon,
   PaperAirplaneIcon,
   ExclamationTriangleIcon,
@@ -438,6 +465,7 @@ import {
   ArrowUpTrayIcon,
   XMarkIcon,
   ChartBarIcon,
+  LightBulbIcon,
 } from '@heroicons/vue/24/outline'
 import DocumentViewer from './DocumentViewer.vue'
 
@@ -456,6 +484,10 @@ const isConnected = ref(true)
 const sessionId = ref(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 const messageList = ref(null)
 const messageInput = ref(null)
+
+// AI Suggestions state
+const suggestions = ref([])
+const isGeneratingSuggestions = ref(false)
 
 // File upload state
 const showFileUpload = ref(false)
@@ -540,6 +572,59 @@ const formatDocumentDate = (dateString) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// AI Suggestions functions
+const generateSuggestionsParallel = async (userMessage) => {
+  if (isGeneratingSuggestions.value) return
+
+  isGeneratingSuggestions.value = true
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        session_id: sessionId.value + '_suggestions', // Farklı session ID kullan
+        message: `Kullanıcı bu mesajı gönderdi: "${userMessage}". Bu mesaja AI nasıl yanıt verebilir ona göre kullanıcının AI yanıtına verebileceği 3 farklı mantıklı devam önerisi sun. Her öneri farklı bir perspektiften yaklaşsın ve sadece önerileri ver, açıklama yapma. Öneriler şu formatta olsun:
+1. [öneri metni]
+2. [öneri metni]
+3. [öneri metni]`
+      })
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const suggestionsText = data.answer
+
+      // Önerileri parse et
+      const parsedSuggestions = suggestionsText
+        .split('\n')
+        .filter(line => line.match(/^\d+\./))
+        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(suggestion => suggestion.length > 0)
+        .slice(0, 3)
+
+      if (parsedSuggestions.length > 0) {
+        suggestions.value = parsedSuggestions
+        console.log('Parallel suggestions generated:', parsedSuggestions)
+      }
+    }
+  } catch (error) {
+    console.error('Error generating parallel suggestions:', error)
+  } finally {
+    isGeneratingSuggestions.value = false
+  }
+}
+
+const selectSuggestion = (suggestion) => {
+  newMessage.value = suggestion
+  suggestions.value = [] // Önerileri temizle
+  focusInput()
+  adjustTextareaHeight()
 }
 
 // Template handling functions
@@ -718,6 +803,9 @@ const validateAndSetFile = (file) => {
 const uploadFile = async () => {
   if (!selectedFile.value || isUploadingFile.value) return
 
+  // Önerileri temizle
+  suggestions.value = []
+
   isUploadingFile.value = true
 
   try {
@@ -725,10 +813,16 @@ const uploadFile = async () => {
     formData.append('file', selectedFile.value)
     formData.append('session_id', sessionId.value)
 
-    const response = await fetch(`${API_BASE_URL}/upload-file`, {
+    // Dosya yükleme ve önerileri paralel başlat
+    const uploadPromise = fetch(`${API_BASE_URL}/upload-file`, {
       method: 'POST',
       body: formData
     })
+
+    const fileUploadMessage = `Dosya yükleme: ${selectedFile.value.name}`
+    const suggestionsPromise = generateSuggestionsParallel(fileUploadMessage)
+
+    const response = await uploadPromise
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
@@ -753,14 +847,17 @@ const uploadFile = async () => {
     showFileUpload.value = false
 
     await loadAnalysisStatus()
-
     showNotification('Dosya başarıyla yüklendi ve analiz edildi!', 'success')
+
+    // Önerilerin bitmesini bekle
+    await suggestionsPromise
 
   } catch (error) {
     console.error("File upload error:", error)
     showNotification(`Dosya yüklenirken hata: ${error.message}`, 'error')
   } finally {
     isUploadingFile.value = false
+    await nextTick()
     scrollToBottom()
   }
 }
@@ -768,6 +865,9 @@ const uploadFile = async () => {
 const sendMessage = async () => {
   const userMessageText = newMessage.value.trim()
   if (!userMessageText || isLoading.value || !isConnected.value) return
+
+  // Önerileri temizle
+  suggestions.value = []
 
   messages.value.push({
     id: Date.now(),
@@ -781,7 +881,8 @@ const sendMessage = async () => {
   isLoading.value = true
 
   try {
-    const response = await fetch(`${API_BASE_URL}/chat`, {
+    // Ana AI yanıtı ve önerileri paralel olarak başlat
+    const mainResponsePromise = fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -792,6 +893,12 @@ const sendMessage = async () => {
         message: currentMessage
       })
     })
+
+    // Önerileri paralel olarak başlat
+    const suggestionsPromise = generateSuggestionsParallel(currentMessage)
+
+    // Ana yanıtı bekle
+    const response = await mainResponsePromise
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
@@ -808,6 +915,9 @@ const sendMessage = async () => {
 
     await loadAnalysisStatus()
     isConnected.value = true
+
+    // Önerilerin de bitmesini bekle (eğer hala devam ediyorsa)
+    await suggestionsPromise
 
   } catch (error) {
     console.error("API Error:", error)
@@ -826,6 +936,7 @@ const sendMessage = async () => {
     })
   } finally {
     isLoading.value = false
+    await nextTick()
     scrollToBottom()
     focusInput()
   }
@@ -990,8 +1101,23 @@ onMounted(async () => {
   }
 }
 
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .message-enter-active {
   animation: slideInUp 0.3s ease-out;
+}
+
+.suggestion-item {
+  animation: slideInFromRight 0.4s ease-out both;
 }
 
 @keyframes bounce {
