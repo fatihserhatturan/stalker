@@ -1,0 +1,113 @@
+<template>
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h4 class="text-white font-medium">Kaynak Dağılımı</h4>
+      <div v-if="data" class="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+        {{ data.distribution.length }} kaynak türü
+      </div>
+    </div>
+    <canvas ref="chartCanvas" class="w-full h-96 bg-white rounded-lg"></canvas>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, watch, onUnmounted } from 'vue'
+
+const props = defineProps({
+  data: Object
+})
+
+const emit = defineEmits(['chart-ready'])
+
+const chartCanvas = ref(null)
+let chartInstance = null
+
+const createChart = async () => {
+  if (!chartCanvas.value) return
+
+  try {
+    if (!window.Chart) {
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js'
+      document.head.appendChild(script)
+
+      await new Promise((resolve, reject) => {
+        script.onload = resolve
+        script.onerror = reject
+      })
+    }
+
+    if (chartInstance) {
+      chartInstance.destroy()
+    }
+
+    let chartData
+
+    if (props.data && props.data.distribution.length > 0) {
+      const distribution = props.data.distribution
+      chartData = {
+        labels: distribution.map(item => item.role),
+        datasets: [{
+          data: distribution.map(item => item.percentage),
+          backgroundColor: distribution.map(item => item.color || 'rgba(59, 130, 246, 0.8)'),
+          borderColor: distribution.map(item => item.color || 'rgba(59, 130, 246, 1)'),
+          borderWidth: 2
+        }]
+      }
+    } else {
+      chartData = {
+        labels: ['Frontend Developer', 'Backend Developer', 'UI/UX Designer', 'DevOps Engineer', 'QA Engineer'],
+        datasets: [{
+          data: [30, 35, 15, 10, 10],
+          backgroundColor: [
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(245, 158, 11, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(239, 68, 68, 0.8)'
+          ],
+          borderColor: [
+            'rgba(59, 130, 246, 1)',
+            'rgba(16, 185, 129, 1)',
+            'rgba(245, 158, 11, 1)',
+            'rgba(139, 92, 246, 1)',
+            'rgba(239, 68, 68, 1)'
+          ],
+          borderWidth: 2
+        }]
+      }
+    }
+
+    chartInstance = new window.Chart(chartCanvas.value, {
+      type: 'doughnut',
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Kaynak Dağılımı (%)'
+          },
+          legend: {
+            position: 'bottom'
+          }
+        }
+      }
+    })
+
+    emit('chart-ready', chartCanvas.value)
+  } catch (error) {
+    console.error('Chart.js load error:', error)
+  }
+}
+
+onMounted(createChart)
+watch(() => props.data, createChart, { deep: true })
+
+onUnmounted(() => {
+  if (chartInstance) {
+    chartInstance.destroy()
+  }
+})
+</script>

@@ -7,7 +7,6 @@ const routes = [
     name: 'Chat',
     component: ChatComponent
   }
-  // DocumentViewer artık ayrı bir route değil, ChatComponent içinde kullanılıyor
 ]
 
 const router = createRouter({

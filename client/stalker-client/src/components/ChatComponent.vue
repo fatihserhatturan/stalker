@@ -1,689 +1,131 @@
 <template>
   <div class="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-    <!-- Chat Bölümü -->
     <div
       :class="[
         'flex flex-col transition-all duration-500 ease-in-out',
         showDocument ? 'w-1/2' : 'w-full'
       ]"
     >
-      <!-- Header -->
-      <div class="relative bg-gray-900/80 backdrop-blur-md border-b border-gray-700/50 shadow-lg">
-        <div class="max-w-4xl mx-auto px-6 py-4 h-[80px]">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 rounded-xl shadow-lg overflow-hidden bg-white/10 backdrop-blur-sm">
-                <img src="@/assets/logo.png" alt="AI Logo" class="w-full h-full object-contain p-1" />
-              </div>
-              <div>
-                <h1 class="text-xl font-semibold text-white">AI Business Analyst</h1>
-              </div>
-            </div>
+      <ChatHeader
+        :is-loading="chat.isLoading.value"
+        :is-connected="isConnected"
+        :is-image-generation-enabled="isImageGenerationEnabled"
+        :has-template="!!fileUpload.templateFile.value"
+        :show-progress="chat.messages.value.length > 1"
+        :completion-rate="completionRate"
+        @toggle-image-generation="toggleImageGeneration"
+        @toggle-template-upload="toggleTemplateUpload"
+      />
 
-            <!-- İlerleme ve Template Kontrolleri -->
-            <div class="flex items-center space-x-3">
-              <!-- Görüntü Üretimi Toggle Butonu -->
-              <button
-                @click="isImageGenerationEnabled = !isImageGenerationEnabled"
-                :disabled="isLoading || !isConnected"
-                :class="[
-                  'flex items-center space-x-1 px-3 py-2 border rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed',
-                  isImageGenerationEnabled
-                    ? 'bg-purple-600 border-purple-500 text-white'
-                    : 'bg-gray-700 border-gray-600 hover:border-purple-400 text-white'
-                ]"
-                title="Görüntü Üretimi Aktif/Pasif"
-              >
-                <ChartBarIcon class="w-4 h-4" />
-                <span>{{ isImageGenerationEnabled ? 'Görüntü Aktif' : 'Görüntü Pasif' }}</span>
-              </button>
+      <TemplateUpload
+        v-if="showTemplateUpload"
+        :template-file="fileUpload.templateFile.value"
+        @close="showTemplateUpload = false"
+        @template-selected="handleTemplateSelected"
+        @template-removed="handleTemplateRemoved"
+      />
 
-              <!-- Template Yükleme Butonu -->
-              <button
-                @click="showTemplateUpload = !showTemplateUpload"
-                :disabled="isLoading || !isConnected"
-                class="flex items-center space-x-1 px-3 py-2 bg-gray-700 border border-gray-600 hover:border-orange-400 text-white rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Doküman Template Yükle"
-              >
-                <DocumentIcon class="w-4 h-4" />
-                <span>Template</span>
-                <div v-if="templateFile" class="w-2 h-2 bg-orange-400 rounded-full"></div>
-              </button>
+      <MessageList
+        ref="messageListRef"
+        :messages="chat.messages.value"
+        :suggestions="chat.suggestions.value"
+        :session-documents="document.sessionDocuments.value"
+        :is-loading="chat.isLoading.value"
+        :is-generating-document="document.isGenerating.value"
+        :is-uploading-file="fileUpload.isUploading.value"
+        :is-connected="isConnected"
+        :template-file="fileUpload.templateFile.value"
+        @suggestion-selected="handleSuggestionSelected"
+        @document-opened="handleDocumentOpened"
+      />
 
-              <!-- İlerleme Göstergesi -->
-              <div v-if="messages.length > 1" class="flex items-center space-x-2 px-3 py-2 bg-gray-800/60 rounded-lg border border-gray-700/30">
-                <div class="w-2 h-2 rounded-full" :class="getStatusColor()"></div>
-                <span class="text-xs text-gray-300">{{ getCompletionRate() }}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <DocumentGenerateButton
+        v-if="chat.messages.value.length > 2 && !showDocument"
+        :is-generating="document.isGenerating.value"
+        :is-connected="isConnected"
+        :is-loading="chat.isLoading.value"
+        :template-file="fileUpload.templateFile.value"
+        :is-image-generation-enabled="isImageGenerationEnabled"
+        @generate="handleGenerateDocument"
+      />
 
-      <!-- Template Yükleme Alanı -->
-      <div v-if="showTemplateUpload" class="border-b border-gray-700/50 bg-gray-800/40">
-        <div class="max-w-4xl mx-auto px-6 py-4">
-          <div class="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-medium text-white flex items-center space-x-2">
-                <DocumentIcon class="w-4 h-4 text-orange-400" />
-                <span>Doküman Template Yükle</span>
-              </h3>
-              <button
-                @click="showTemplateUpload = false"
-                class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
-              >
-                <XMarkIcon class="w-4 h-4" />
-              </button>
-            </div>
-
-            <div v-if="!templateFile" class="space-y-3">
-              <div
-                @drop="handleTemplateDrop"
-                @dragover.prevent
-                @dragenter.prevent
-                class="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-orange-500 transition-all duration-200 cursor-pointer"
-                :class="{ 'border-orange-500 bg-orange-500/10': isTemplateDropping }"
-              >
-                <input
-                  ref="templateInput"
-                  type="file"
-                  accept=".txt,.md,.docx,.doc"
-                  @change="handleTemplateSelect"
-                  class="hidden"
-                />
-
-                <div class="space-y-2">
-                  <DocumentIcon class="w-6 h-6 text-gray-400 mx-auto" />
-                  <p class="text-sm text-gray-300">
-                    <button
-                      @click="$refs.templateInput?.click()"
-                      class="text-orange-400 hover:text-orange-300 hover:border-b hover:border-orange-300 transition-all duration-200"
-                    >
-                      Template dosyası seç
-                    </button>
-                    veya buraya sürükle
-                  </p>
-                  <p class="text-xs text-gray-500">
-                    Desteklenen formatlar: Word, Markdown, Text
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="space-y-3">
-              <div class="flex items-center space-x-2 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                <DocumentIcon class="w-5 h-5 text-orange-400" />
-                <span class="text-sm text-orange-300 flex-1">{{ templateFile.name }}</span>
-                <button
-                  @click="removeTemplate"
-                  class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
-                >
-                  <XMarkIcon class="w-4 h-4" />
-                </button>
-              </div>
-              <p class="text-xs text-gray-400">
-                ✓ Template yüklendi. Doküman oluşturulurken bu template kullanılacak.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Mesajlar -->
-      <div class="flex-1 overflow-hidden">
-        <div class="h-full max-w-4xl mx-auto">
-          <div
-            ref="messageList"
-            class="h-full overflow-y-auto px-6 py-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-          >
-            <div class="space-y-6">
-              <div
-                v-for="msg in messages"
-                :key="msg.id"
-                :class="['flex items-start space-x-4', msg.author === 'user' ? 'flex-row-reverse space-x-reverse' : '']"
-              >
-                <div class="flex-shrink-0">
-                  <div
-                    :class="[
-                      'w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 overflow-hidden',
-                      msg.author === 'ai'
-                        ? 'bg-white/10 backdrop-blur-sm'
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white'
-                    ]"
-                  >
-                    <UserIcon v-if="msg.author === 'user'" class="w-5 h-5" />
-                    <img v-else src="@/assets/logo.png" alt="AI Logo" class="w-full h-full object-contain p-1" />
-                  </div>
-                </div>
-
-                <div
-                  :class="[
-                    'relative max-w-2xl rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 hover:border-blue-400',
-                    msg.author === 'ai'
-                      ? 'bg-gray-800 border border-gray-700/50 text-gray-100'
-                      : 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border border-transparent hover:border-emerald-300'
-                  ]"
-                >
-                  <p :class="['text-sm leading-relaxed whitespace-pre-wrap', msg.author === 'ai' ? 'text-gray-100' : 'text-white']">
-                    {{ msg.text }}
-                  </p>
-                  <div
-                    :class="[
-                      'absolute top-4 w-2 h-2 transform rotate-45',
-                      msg.author === 'ai'
-                        ? '-left-1 bg-gray-800 border-l border-b border-gray-700/50'
-                        : '-right-1 bg-gradient-to-r from-emerald-600 to-teal-700'
-                    ]"
-                  ></div>
-                </div>
-              </div>
-
-              <!-- AI Önerileri -->
-              <div v-if="suggestions.length > 0 && !isLoading" class="flex flex-col items-end space-y-2">
-                <button
-                  v-for="(suggestion, index) in suggestions"
-                  :key="index"
-                  @click="selectSuggestion(suggestion)"
-                  class="max-w-2xl text-left p-3 bg-gradient-to-r from-blue-600/20 to-purple-700/20 border border-blue-500/30 rounded-xl hover:border-blue-400 transition-all duration-200 group suggestion-item"
-                  :style="{ animationDelay: `${index * 100}ms` }"
-                >
-                  <div class="flex items-start space-x-3">
-                    <div class="flex-shrink-0 mt-1">
-                      <div class="w-6 h-6 rounded-full bg-blue-600/30 flex items-center justify-center group-hover:bg-blue-600/50 transition-colors">
-                        <LightBulbIcon class="w-3 h-3 text-blue-300" />
-                      </div>
-                    </div>
-                    <p class="text-sm text-blue-100 group-hover:text-white transition-colors">{{ suggestion }}</p>
-                  </div>
-                </button>
-              </div>
-
-              <!-- Dokümanları AI mesajı gibi göster -->
-              <div
-                v-for="doc in sessionDocuments"
-                :key="doc.id"
-                class="flex items-start space-x-4"
-              >
-                <div class="flex-shrink-0">
-                  <div class="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg">
-                    <DocumentTextIcon class="w-5 h-5 text-white" />
-                  </div>
-                </div>
-
-                <div class="relative max-w-2xl rounded-2xl px-4 py-3 bg-gray-800 border border-gray-700/50 text-gray-100 shadow-lg transition-all duration-200 hover:border-emerald-400">
-                  <div class="space-y-2">
-                    <div class="flex items-center space-x-2">
-                      <DocumentTextIcon class="w-4 h-4 text-emerald-400" />
-                      <span class="text-sm font-medium text-emerald-400">Analiz Dokümanı Oluşturuldu</span>
-                    </div>
-
-                    <div class="bg-gray-700/30 rounded-lg p-3 border border-gray-600/30">
-                      <h4 class="text-sm font-medium text-white mb-1">{{ doc.title }}</h4>
-                      <p class="text-xs text-gray-300 mb-2">{{ formatDocumentDate(doc.created_at) }}</p>
-
-                      <button
-                        @click="openDocument(doc)"
-                        class="inline-flex items-center space-x-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs transition-colors"
-                      >
-                        <DocumentTextIcon class="w-3 h-3" />
-                        <span>Dokümanı Görüntüle</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="isLoading" class="flex items-start space-x-4">
-              <div class="flex-shrink-0">
-                <div class="w-10 h-10 rounded-full shadow-lg overflow-hidden bg-white/10 backdrop-blur-sm">
-                  <img src="@/assets/logo.png" alt="AI Logo" class="w-full h-full object-contain p-1" />
-                </div>
-              </div>
-              <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
-                <div class="flex items-center space-x-2">
-                  <div class="flex space-x-1">
-                    <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
-                    <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.15s;"></div>
-                    <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.3s;"></div>
-                  </div>
-                  <span class="text-xs text-gray-400 ml-2">AI analiz yapıyor...</span>
-                </div>
-                <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
-              </div>
-            </div>
-
-            <div v-if="isGeneratingDocument" class="flex items-start space-x-4">
-              <div class="flex-shrink-0">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg">
-                  <DocumentTextIcon class="w-5 h-5 text-white" />
-                </div>
-              </div>
-              <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
-                <div class="flex items-center space-x-2">
-                  <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
-                  <span class="text-xs text-gray-400 ml-2">
-                    {{ templateFile ? 'Template ile doküman oluşturuluyor...' : 'Analiz dokümanı oluşturuluyor...' }}
-                  </span>
-                </div>
-                <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
-              </div>
-            </div>
-
-            <div v-if="isUploadingFile" class="flex items-start space-x-4">
-              <div class="flex-shrink-0">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-700 flex items-center justify-center shadow-lg">
-                  <ArrowUpTrayIcon class="w-5 h-5 text-white" />
-                </div>
-              </div>
-              <div class="relative bg-gray-800 border border-gray-700/50 rounded-2xl px-4 py-3 shadow-lg">
-                <div class="flex items-center space-x-2">
-                  <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400"></div>
-                  <span class="text-xs text-gray-400 ml-2">Dosya yükleniyor ve analiz ediliyor...</span>
-                </div>
-                <div class="absolute top-4 -left-1 w-2 h-2 bg-gray-800 border-l border-b border-gray-700/50 transform rotate-45"></div>
-              </div>
-            </div>
-
-            <div v-if="!isConnected" class="text-center py-4">
-              <div class="inline-flex items-center px-4 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm">
-                <ExclamationTriangleIcon class="w-4 h-4 mr-2" />
-                Backend'e bağlantı kurulamıyor. Lütfen sunucunun çalıştığından emin olun.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Doküman Oluşturma Butonu -->
-      <div v-if="messages.length > 2 && !showDocument" class="px-6 py-4">
-        <div class="max-w-4xl mx-auto">
-          <div class="flex items-center justify-center mb-4">
-            <button
-              @click="generateAnalysisDocument"
-              :disabled="isGeneratingDocument || !isConnected || isLoading"
-              class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:border-emerald-400 text-white rounded-xl transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed border border-transparent"
-            >
-              <DocumentTextIcon class="w-5 h-5" />
-              <span>{{ isGeneratingDocument ? 'Doküman Oluşturuluyor...' : 'Analiz Dokümanı Oluştur' }}</span>
-            </button>
-          </div>
-          <div class="text-center">
-            <p class="text-xs text-gray-400">
-              {{ templateFile
-                ? `Template "${templateFile.name}" kullanılarak doküman oluşturulacak`
-                : 'Sohbet geçmişinize dayanarak detaylı bir ön analiz dokümanı oluşturulacak'
-              }}
-              {{ isImageGenerationEnabled ? ' (Görsel analiz dahil)' : ' (Sadece metin dokümanı)' }}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Mesaj Giriş Alanı ve Dosya Yükleme -->
-      <div class="px-6 py-4">
-        <div class="max-w-4xl mx-auto">
-          <!-- Dosya Yükleme Alanı -->
-          <div v-if="showFileUpload" class="mb-4 p-4 bg-gray-800/60 border border-gray-700/50 rounded-xl">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-medium text-white">Proje Dosyası Yükle</h3>
-              <button
-                @click="showFileUpload = false"
-                class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
-              >
-                <XMarkIcon class="w-4 h-4" />
-              </button>
-            </div>
-
-            <div
-              @drop="handleFileDrop"
-              @dragover.prevent
-              @dragenter.prevent
-              class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-purple-500 transition-all duration-200 cursor-pointer"
-              :class="{ 'border-purple-500 bg-purple-500/10': isDragging }"
-            >
-              <input
-                ref="fileInput"
-                type="file"
-                accept=".txt,.md,.pdf,.docx,.doc"
-                @change="handleFileSelect"
-                class="hidden"
-              />
-
-              <div class="space-y-2">
-                <ArrowUpTrayIcon class="w-8 h-8 text-gray-400 mx-auto" />
-                <p class="text-sm text-gray-300">
-                  <button
-                    @click="$refs.fileInput?.click()"
-                    class="text-purple-400 hover:text-purple-300 hover:border-b hover:border-purple-300 transition-all duration-200"
-                  >
-                    Dosya seç
-                  </button>
-                  veya buraya sürükle
-                </p>
-                <p class="text-xs text-gray-500">
-                  Desteklenen formatlar: PDF, Word, Markdown, Text
-                </p>
-              </div>
-            </div>
-
-            <div v-if="selectedFile" class="mt-3 flex items-center space-x-2 p-3 bg-gray-700/50 rounded-lg">
-              <DocumentTextIcon class="w-5 h-5 text-purple-400" />
-              <span class="text-sm text-gray-300 flex-1">{{ selectedFile.name }}</span>
-              <button
-                @click="uploadFile"
-                :disabled="isUploadingFile"
-                class="px-3 py-1 bg-purple-600 hover:border-purple-400 text-white text-xs rounded-md transition-all duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed border border-transparent"
-              >
-                {{ isUploadingFile ? 'Yükleniyor...' : 'Yükle' }}
-              </button>
-              <button
-                @click="selectedFile = null"
-                class="text-gray-400 hover:text-gray-200 hover:border hover:border-gray-400 rounded transition-all duration-200 p-1"
-              >
-                <XMarkIcon class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <form @submit.prevent="sendMessage" class="relative">
-            <div class="relative flex items-end">
-              <textarea
-                v-model="newMessage"
-                ref="messageInput"
-                placeholder="Proje fikrinizi detaylıca anlatın..."
-                :disabled="isLoading || !isConnected"
-                rows="2"
-                class="w-full pl-4 pr-20 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm placeholder-gray-400 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-900 disabled:text-gray-500 shadow-lg resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
-                :style="{ maxHeight: '120px', minHeight: '48px' }"
-                @input="adjustTextareaHeight"
-                @keydown.enter.prevent="handleEnterKey"
-              />
-
-              <!-- Dosya Yükleme Butonu -->
-              <button
-                type="button"
-                @click="showFileUpload = !showFileUpload"
-                :disabled="isLoading || !isConnected"
-                class="absolute right-12 bottom-3 p-2 text-gray-400 hover:text-purple-400 hover:border hover:border-purple-400 rounded transition-all duration-200 disabled:text-gray-600 disabled:cursor-not-allowed"
-                title="Dosya Yükle"
-              >
-                <PaperClipIcon class="w-4 h-4" />
-              </button>
-
-              <button
-                type="submit"
-                :disabled="isLoading || newMessage.trim() === '' || !isConnected"
-                class="absolute right-2 bottom-3 p-2 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg hover:border-blue-400 transition-all duration-200 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed border border-transparent"
-              >
-                <PaperAirplaneIcon class="w-4 h-4" />
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+      <MessageInput
+        v-model="newMessage"
+        ref="messageInputRef"
+        :is-loading="chat.isLoading.value"
+        :is-connected="isConnected"
+        :show-file-upload="showFileUpload"
+        :selected-file="fileUpload.selectedFile.value"
+        :is-uploading="fileUpload.isUploading.value"
+        @submit="handleSendMessage"
+        @toggle-file-upload="toggleFileUpload"
+        @file-selected="handleFileSelected"
+        @file-removed="handleFileRemoved"
+        @upload-file="handleUploadFile"
+      />
     </div>
 
-    <!-- Document Viewer Bölümü -->
     <div
       v-if="showDocument"
       class="w-1/2 border-l border-gray-700/50 bg-gray-900/50 backdrop-blur-md transition-all duration-500 ease-in-out transform translate-x-0"
     >
       <DocumentViewer
-        :document-content="documentContent"
-        :session-id="sessionId"
-        :visual-data="isImageGenerationEnabled ? visualData : null"
-        @close-document="closeDocument"
+        :document-content="document.documentContent.value"
+        :session-id="chat.sessionId.value"
+        :visual-data="isImageGenerationEnabled ? document.visualData.value : null"
+        @close-document="handleCloseDocument"
       />
     </div>
 
-    <!-- Bildirim -->
-    <div
-      v-if="notification.show"
-      :class="[
-        'fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg transition-all duration-300 z-50',
-        notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-      ]"
-    >
-      {{ notification.message }}
-    </div>
+    <NotificationComponent :notification="notifications.notification.value" />
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import {
-  UserIcon,
-  PaperAirplaneIcon,
-  ExclamationTriangleIcon,
-  DocumentTextIcon,
-  DocumentIcon,
-  PaperClipIcon,
-  ArrowUpTrayIcon,
-  XMarkIcon,
-  ChartBarIcon,
-  LightBulbIcon,
-} from '@heroicons/vue/24/outline'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useChat } from '@/composables/useChat'
+import { useFileUpload } from '@/composables/useFileUpload'
+import { useDocument } from '@/composables/useDocument'
+import { useNotifications } from '@/composables/useNotifications'
+import { useApi } from '@/composables/useApi'
+
+import ChatHeader from './chat/ChatHeader.vue'
+import TemplateUpload from './file/TemplateUpload.vue'
+import MessageList from './chat/MessageList.vue'
+import DocumentGenerateButton from './document/DocumentGenerateButton.vue'
+import MessageInput from './chat/MessageInput.vue'
 import DocumentViewer from './DocumentViewer.vue'
+import NotificationComponent from './ui/NotificationComponent.vue'
 
-const messages = ref([
-  {
-    id: 1,
-    text: 'Merhaba! Ben projenizin ön analizini yapmak için buradayım. Proje fikrinizi detaylıca anlatırsanız, kapsamlı bir analiz hazırlayabilirim.\n\n💡 İpucu: Eğer mevcut bir projeniz varsa, proje dokümanlarınızı (PDF, Word, tekst dosyaları) yükleyerek daha detaylı analiz yapabilirim!',
-    author: 'ai'
-  }
-])
+const chat = useChat()
+const fileUpload = useFileUpload()
+const document = useDocument()
+const notifications = useNotifications()
+const { get } = useApi()
+
+const messageListRef = ref(null)
+const messageInputRef = ref(null)
+
 const newMessage = ref('')
-const isLoading = ref(false)
-const isGeneratingDocument = ref(false)
-const isUploadingFile = ref(false)
 const isConnected = ref(true)
-const sessionId = ref(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
-const messageList = ref(null)
-const messageInput = ref(null)
-
-// AI Suggestions state
-const suggestions = ref([])
-const isGeneratingSuggestions = ref(false)
-
-// File upload state
-const showFileUpload = ref(false)
-const selectedFile = ref(null)
-const isDragging = ref(false)
-const fileInput = ref(null)
-
-// Template upload state
+const isImageGenerationEnabled = ref(false)
 const showTemplateUpload = ref(false)
-const templateFile = ref(null)
-const isTemplateDropping = ref(false)
-const templateInput = ref(null)
-
-// Document viewer state
+const showFileUpload = ref(false)
 const showDocument = ref(false)
-const documentContent = ref('')
-const sessionDocuments = ref([])
 const analysisStatus = ref(null)
 
-const isGeneratingVisualData = ref(false)
-const visualData = ref(null)
-const isImageGenerationEnabled = ref(false) // Görüntü üretimi toggle durumu
-
-const notification = ref({
-  show: false,
-  message: '',
-  type: 'success'
+const completionRate = computed(() => {
+  if (!analysisStatus.value || isNaN(analysisStatus.value.completion_rate)) {
+    return 0
+  }
+  return Math.round(analysisStatus.value.completion_rate)
 })
-
-const API_BASE_URL = 'http://localhost:8000'
-
-const showNotification = (message, type = 'success') => {
-  notification.value = { show: true, message, type }
-  setTimeout(() => {
-    notification.value.show = false
-  }, 3000)
-}
-
-const scrollToBottom = async () => {
-  await nextTick()
-  const list = messageList.value
-  if (list) {
-    list.scrollTop = list.scrollHeight
-  }
-}
-
-const focusInput = () => {
-  nextTick(() => {
-    if (messageInput.value) {
-      messageInput.value.focus()
-      adjustTextareaHeight()
-    }
-  })
-}
-
-const adjustTextareaHeight = () => {
-  const textarea = messageInput.value
-  if (textarea) {
-    textarea.style.height = '48px'
-    const scrollHeight = textarea.scrollHeight
-    const minHeight = 48
-    const maxHeight = 120
-    let newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight)
-    textarea.style.height = newHeight + 'px'
-  }
-}
-
-const handleEnterKey = (event) => {
-  if (event.shiftKey) {
-    return
-  } else {
-    event.preventDefault()
-    sendMessage()
-  }
-}
-
-const formatDocumentDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('tr-TR', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// AI Suggestions functions
-const generateSuggestionsParallel = async (userMessage) => {
-  if (isGeneratingSuggestions.value) return
-
-  isGeneratingSuggestions.value = true
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        session_id: sessionId.value + '_suggestions', // Farklı session ID kullan
-        message: `Kullanıcı bu mesajı gönderdi: "${userMessage}". Bu mesaja AI nasıl yanıt verebilir ona göre kullanıcının AI yanıtına verebileceği 3 farklı mantıklı devam önerisi sun. Her öneri farklı bir perspektiften yaklaşsın ve sadece önerileri ver, açıklama yapma. Öneriler şu formatta olsun:
-1. [öneri metni]
-2. [öneri metni]
-3. [öneri metni]`
-      })
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      const suggestionsText = data.answer
-
-      // Önerileri parse et
-      const parsedSuggestions = suggestionsText
-        .split('\n')
-        .filter(line => line.match(/^\d+\./))
-        .map(line => line.replace(/^\d+\.\s*/, '').trim())
-        .filter(suggestion => suggestion.length > 0)
-        .slice(0, 3)
-
-      if (parsedSuggestions.length > 0) {
-        suggestions.value = parsedSuggestions
-        console.log('Parallel suggestions generated:', parsedSuggestions)
-      }
-    }
-  } catch (error) {
-    console.error('Error generating parallel suggestions:', error)
-  } finally {
-    isGeneratingSuggestions.value = false
-  }
-}
-
-const selectSuggestion = (suggestion) => {
-  newMessage.value = suggestion
-  suggestions.value = [] // Önerileri temizle
-  focusInput()
-  adjustTextareaHeight()
-}
-
-// Template handling functions
-const handleTemplateSelect = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    validateAndSetTemplate(file)
-  }
-}
-
-const handleTemplateDrop = (event) => {
-  event.preventDefault()
-  isTemplateDropping.value = false
-
-  const files = event.dataTransfer.files
-  if (files.length > 0) {
-    validateAndSetTemplate(files[0])
-  }
-}
-
-const validateAndSetTemplate = (file) => {
-  const allowedTypes = [
-    'text/plain',
-    'text/markdown',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword'
-  ]
-
-  const allowedExtensions = ['.txt', '.md', '.docx', '.doc']
-  const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
-
-  if (file.size > 5 * 1024 * 1024) {
-    showNotification('Template dosyası 5MB\'dan büyük olamaz', 'error')
-    return
-  }
-
-  if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-    showNotification('Desteklenmeyen template formatı. İzin verilen formatlar: Word, Markdown, Text', 'error')
-    return
-  }
-
-  templateFile.value = file
-  showNotification('Template başarıyla yüklendi!', 'success')
-  showTemplateUpload.value = false
-}
-
-const removeTemplate = () => {
-  templateFile.value = null
-  showNotification('Template kaldırıldı', 'success')
-}
 
 const checkConnection = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    isConnected.value = response.ok
-    return response.ok
+    const response = await get('/health')
+    isConnected.value = !!response
+    return !!response
   } catch (error) {
     isConnected.value = false
     return false
@@ -692,456 +134,166 @@ const checkConnection = async () => {
 
 const loadAnalysisStatus = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/analysis-status/${sessionId.value}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      analysisStatus.value = data.status
+    const response = await chat.getAnalysisStatus()
+    if (response && !response.error) {
+      analysisStatus.value = response.status
     }
   } catch (error) {
     console.error('Error loading analysis status:', error)
   }
 }
 
-const getStatusColor = () => {
-  if (!analysisStatus.value) return 'bg-gray-500'
-  const rate = analysisStatus.value.completion_rate
-  if (rate < 30) return 'bg-red-400'
-  if (rate < 70) return 'bg-yellow-400'
-  return 'bg-green-400'
+const toggleImageGeneration = () => {
+  isImageGenerationEnabled.value = !isImageGenerationEnabled.value
 }
 
-const getCompletionRate = () => {
-  if (!analysisStatus.value || isNaN(analysisStatus.value.completion_rate)) {
-    return 0
-  }
-  return Math.round(analysisStatus.value.completion_rate)
+const toggleTemplateUpload = () => {
+  showTemplateUpload.value = !showTemplateUpload.value
 }
 
-const loadSessionDocuments = async () => {
+const toggleFileUpload = () => {
+  showFileUpload.value = !showFileUpload.value
+}
+
+const handleTemplateSelected = async (file) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/session-documents/${sessionId.value}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      sessionDocuments.value = data.documents || []
-      scrollToBottom()
-    }
+    fileUpload.setTemplateFile(file)
+    await fileUpload.uploadTemplate(file, chat.sessionId.value)
+    notifications.showNotification('Template başarıyla yüklendi!', 'success')
+    showTemplateUpload.value = false
   } catch (error) {
-    console.error('Error loading session documents:', error)
+    notifications.showNotification(error.message, 'error')
+    fileUpload.removeTemplate()
   }
 }
 
-const openDocument = async (doc) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/document/${sessionId.value}/${doc.id}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
+const handleTemplateRemoved = () => {
+  fileUpload.removeTemplate()
+  notifications.showNotification('Template kaldırıldı', 'success')
+}
 
-    if (response.ok) {
-      const data = await response.json()
-      documentContent.value = data.document.content
-      showDocument.value = true
-    } else {
-      showNotification('Doküman yüklenirken hata oluştu', 'error')
-    }
+const handleFileSelected = (file) => {
+  try {
+    fileUpload.setSelectedFile(file)
   } catch (error) {
-    console.error('Error loading document:', error)
-    showNotification('Doküman yüklenirken hata oluştu', 'error')
+    notifications.showNotification(error.message, 'error')
   }
 }
 
-const handleFileSelect = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    validateAndSetFile(file)
-  }
+const handleFileRemoved = () => {
+  fileUpload.removeSelectedFile()
 }
 
-const handleFileDrop = (event) => {
-  event.preventDefault()
-  isDragging.value = false
-
-  const files = event.dataTransfer.files
-  if (files.length > 0) {
-    validateAndSetFile(files[0])
-  }
-}
-
-const validateAndSetFile = (file) => {
-  const allowedTypes = [
-    'text/plain',
-    'text/markdown',
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword'
-  ]
-
-  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx', '.doc']
-  const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
-
-  if (file.size > 10 * 1024 * 1024) {
-    showNotification('Dosya boyutu 10MB\'dan büyük olamaz', 'error')
-    return
-  }
-
-  if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-    showNotification('Desteklenmeyen dosya formatı. İzin verilen formatlar: PDF, Word, Markdown, Text', 'error')
-    return
-  }
-
-  selectedFile.value = file
-}
-
-const uploadFile = async () => {
-  if (!selectedFile.value || isUploadingFile.value) return
-
-  // Önerileri temizle
-  suggestions.value = []
-
-  isUploadingFile.value = true
-
+const handleUploadFile = async () => {
   try {
-    const formData = new FormData()
-    formData.append('file', selectedFile.value)
-    formData.append('session_id', sessionId.value)
+    const response = await fileUpload.uploadProjectFile(
+      fileUpload.selectedFile.value,
+      chat.sessionId.value
+    )
 
-    // Dosya yükleme ve önerileri paralel başlat
-    const uploadPromise = fetch(`${API_BASE_URL}/upload-file`, {
-      method: 'POST',
-      body: formData
-    })
-
-    const fileUploadMessage = `Dosya yükleme: ${selectedFile.value.name}`
-    const suggestionsPromise = generateSuggestionsParallel(fileUploadMessage)
-
-    const response = await uploadPromise
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-
-    messages.value.push({
+    chat.messages.value.push({
       id: Date.now(),
-      text: `📁 Dosya yüklendi: ${selectedFile.value.name}`,
+      text: `📁 Dosya yüklendi: ${fileUpload.selectedFile.value.name}`,
       author: 'user'
     })
 
-    messages.value.push({
+    chat.messages.value.push({
       id: Date.now() + 1,
-      text: data.analysis,
+      text: response.analysis,
       author: 'ai'
     })
 
-    selectedFile.value = null
     showFileUpload.value = false
-
     await loadAnalysisStatus()
-    showNotification('Dosya başarıyla yüklendi ve analiz edildi!', 'success')
-
-    // Önerilerin bitmesini bekle
-    await suggestionsPromise
-
+    notifications.showNotification('Dosya başarıyla yüklendi ve analiz edildi!', 'success')
+    messageListRef.value?.scrollToBottom()
   } catch (error) {
-    console.error("File upload error:", error)
-    showNotification(`Dosya yüklenirken hata: ${error.message}`, 'error')
-  } finally {
-    isUploadingFile.value = false
-    await nextTick()
-    scrollToBottom()
+    notifications.showNotification(`Dosya yüklenirken hata: ${error.message}`, 'error')
   }
 }
 
-const sendMessage = async () => {
-  const userMessageText = newMessage.value.trim()
-  if (!userMessageText || isLoading.value || !isConnected.value) return
+const handleSuggestionSelected = (suggestion) => {
+  newMessage.value = suggestion
+  chat.suggestions.value = []
+  messageInputRef.value?.focusInput()
+}
 
-  // Önerileri temizle
-  suggestions.value = []
-
-  messages.value.push({
-    id: Date.now(),
-    text: userMessageText,
-    author: 'user'
-  })
-
-  const currentMessage = newMessage.value
+const handleSendMessage = async () => {
+  const messageText = newMessage.value
   newMessage.value = ''
-  scrollToBottom()
-  isLoading.value = true
 
   try {
-    // Ana AI yanıtı ve önerileri paralel olarak başlat
-    const mainResponsePromise = fetch(`${API_BASE_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        session_id: sessionId.value,
-        message: currentMessage
-      })
-    })
-
-    // Önerileri paralel olarak başlat
-    const suggestionsPromise = generateSuggestionsParallel(currentMessage)
-
-    // Ana yanıtı bekle
-    const response = await mainResponsePromise
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-
-    messages.value.push({
-      id: Date.now() + 1,
-      text: data.answer,
-      author: 'ai'
-    })
-
+    await chat.sendMessage(messageText)
     await loadAnalysisStatus()
     isConnected.value = true
-
-    // Önerilerin de bitmesini bekle (eğer hala devam ediyorsa)
-    await suggestionsPromise
-
   } catch (error) {
-    console.error("API Error:", error)
-
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       isConnected.value = false
-      showNotification('Backend sunucusuna bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.', 'error')
+      notifications.showNotification('Backend sunucusuna bağlanılamıyor. Lütfen sunucunun çalıştığından emin olun.', 'error')
     } else {
-      showNotification(`Hata: ${error.message}`, 'error')
+      notifications.showNotification(`Hata: ${error.message}`, 'error')
     }
-
-    messages.value.push({
-      id: Date.now() + 1,
-      text: 'Üzgünüm, şu anda bir teknik sorun yaşıyorum. Lütfen biraz sonra tekrar deneyin.',
-      author: 'ai'
-    })
   } finally {
-    isLoading.value = false
-    await nextTick()
-    scrollToBottom()
-    focusInput()
+    messageInputRef.value?.focusInput()
   }
 }
 
-const generateAnalysisDocument = async () => {
-  if (isGeneratingDocument.value || !isConnected.value) return
-
-  isGeneratingDocument.value = true
-
-  // Sadece görüntü üretimi aktifse görsel veri üret
-  if (isImageGenerationEnabled.value) {
-    isGeneratingVisualData.value = true
-  }
-
+const handleGenerateDocument = async () => {
   try {
-    // Template dosyasını backend'e gönder (eğer varsa)
-    let requestBody = {
-      session_id: sessionId.value
-    }
-
-    // Eğer template var ise, önce template'i yükle
-    if (templateFile.value) {
-      const templateFormData = new FormData()
-      templateFormData.append('file', templateFile.value)
-      templateFormData.append('session_id', sessionId.value)
-      templateFormData.append('is_template', 'true')
-
-      const templateResponse = await fetch(`${API_BASE_URL}/upload-template`, {
-        method: 'POST',
-        body: templateFormData
-      })
-
-      if (templateResponse.ok) {
-        requestBody.use_template = true
-      }
-    }
-
-    // Doküman üretimi her zaman yap
-    const documentPromise = fetch(`${API_BASE_URL}/generate-analysis-document`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    })
-
-    // Görsel veri sadece aktifse üret
-    const promises = [documentPromise]
+    const promises = [
+      document.generateAnalysisDocument(
+        chat.sessionId.value,
+        !!fileUpload.templateFile.value
+      )
+    ]
 
     if (isImageGenerationEnabled.value) {
-      const visualPromise = fetch(`${API_BASE_URL}/generate-visual-data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          session_id: sessionId.value,
-          message: "generate_visual_data"
-        })
-      })
-      promises.push(visualPromise)
+      promises.push(document.generateVisualData(chat.sessionId.value))
     }
 
-    const results = await Promise.allSettled(promises)
+    await Promise.all(promises)
 
-    // Doküman sonucunu işle
-    if (results[0].status === 'fulfilled' && results[0].value.ok) {
-      const documentData = await results[0].value.json()
-      documentContent.value = documentData.document_content
-      showDocument.value = true
-      await loadSessionDocuments()
-      showNotification(
-        templateFile.value
-          ? 'Template ile analiz dokümanı başarıyla oluşturuldu!'
-          : 'Analiz dokümanı başarıyla oluşturuldu!',
-        'success'
-      )
-    } else {
-      const error = results[0].reason || 'Doküman oluşturulamadı'
-      showNotification(`Doküman oluşturulurken hata: ${error}`, 'error')
+    showDocument.value = true
+    notifications.showNotification(
+      fileUpload.templateFile.value
+        ? 'Template ile analiz dokümanı başarıyla oluşturuldu!'
+        : 'Analiz dokümanı başarıyla oluşturuldu!',
+      'success'
+    )
+
+    if (isImageGenerationEnabled.value) {
+      notifications.showNotification('Görsel veriler başarıyla oluşturuldu!', 'success')
     }
-
-    // Görsel veri sonucunu işle (sadece aktifse)
-    if (isImageGenerationEnabled.value && results[1]) {
-      if (results[1].status === 'fulfilled' && results[1].value.ok) {
-        const visualResponseData = await results[1].value.json()
-        visualData.value = visualResponseData.visual_data
-        showNotification('Görsel veriler başarıyla oluşturuldu!', 'success')
-      } else {
-        console.error('Visual data generation failed:', results[1].reason)
-        visualData.value = null
-      }
-    } else if (!isImageGenerationEnabled.value) {
-      // Görüntü üretimi kapalıysa visualData'yı temizle
-      visualData.value = null
-    }
-
   } catch (error) {
-    console.error("Document/Visual generation error:", error)
-    showNotification(`İşlem sırasında hata: ${error.message}`, 'error')
-  } finally {
-    isGeneratingDocument.value = false
-    isGeneratingVisualData.value = false
+    notifications.showNotification(`Doküman oluşturulurken hata: ${error.message}`, 'error')
   }
 }
 
-const closeDocument = () => {
+const handleDocumentOpened = async (doc) => {
+  try {
+    const documentData = await document.loadDocument(chat.sessionId.value, doc.id)
+    document.documentContent.value = documentData.content
+    showDocument.value = true
+  } catch (error) {
+    notifications.showNotification('Doküman yüklenirken hata oluştu', 'error')
+  }
+}
+
+const handleCloseDocument = () => {
   showDocument.value = false
-  documentContent.value = ''
+  document.clearDocument()
 }
 
 onMounted(async () => {
   await checkConnection()
-  await loadSessionDocuments()
+  await document.loadSessionDocuments(chat.sessionId.value)
   await loadAnalysisStatus()
-  focusInput()
+  messageInputRef.value?.focusInput()
 
   const connectionChecker = setInterval(checkConnection, 30000)
 
-  const unwatchMessage = watch(newMessage, () => {
-    nextTick(() => {
-      adjustTextareaHeight()
-    })
-  })
-
   onUnmounted(() => {
     clearInterval(connectionChecker)
-    unwatchMessage()
   })
 })
 </script>
-
-<style scoped>
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: rgb(75 85 99);
-  border-radius: 3px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(107 114 128);
-}
-
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInFromRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.message-enter-active {
-  animation: slideInUp 0.3s ease-out;
-}
-
-.suggestion-item {
-  animation: slideInFromRight 0.4s ease-out both;
-}
-
-@keyframes bounce {
-  0%, 60%, 100% {
-    transform: translateY(0);
-  }
-  30% {
-    transform: translateY(-10px);
-  }
-}
-
-.animate-bounce {
-  animation: bounce 1.4s infinite;
-}
-
-input:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-button:hover:not(:disabled) {
-  border-color: currentColor;
-}
-
-button:active:not(:disabled) {
-  transform: none;
-}
-</style>
