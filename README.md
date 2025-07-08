@@ -56,7 +56,7 @@ AI Business Analyst is a modern web application that revolutionizes software pro
 
 1. **Clone Repository**
 ```bash
-git clone <repository-url>
+git clone https://github.com/fatihserhatturan/stalker.git
 cd ai-business-analyst
 ```
 
